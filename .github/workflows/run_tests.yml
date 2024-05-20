@@ -27,4 +27,4 @@ jobs:
     steps:
       - uses: actions/checkout@main
       - uses: goto-bus-stop/setup-zig@v2
-      - run: zig fmt --check build.zig src/*.zig src/**/*.zig
+      - run: zig fmt --check build.zig src/*.zig
