@@ -1,0 +1,30 @@
+name: run_tests
+
+on:
+  push:
+    tags: # run action on tag push only
+      - "*"
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-tests-master:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@main
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: master
+      - run: zig build test
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - uses: goto-bus-stop/setup-zig@v2
+      - run: zig fmt --check build.zig lib/**/*.zig
