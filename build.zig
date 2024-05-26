@@ -5,8 +5,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const clap = b.dependency("clap", .{});
-    const clap_module = clap.module("clap");
+    const flags = b.dependency("flags", .{});
+    const flags_module = flags.module("flags");
 
     const zdt = b.dependency("zdt", .{
         // use system zoneinfo:
@@ -23,9 +23,9 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
-    exe.linkLibC(); // needed for DNS query
+    //    exe.linkLibC(); // needed for DNS query
 
-    exe.root_module.addImport("clap", clap_module);
+    exe.root_module.addImport("flags", flags_module);
     exe.root_module.addImport("zdt", zdt_module);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -45,4 +45,14 @@ pub fn build(b: *std.Build) void {
     //    run_unit_tests.has_side_effects = true;
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+
+    const docs_step = b.step("docs", "auto-generate documentation");
+    {
+        const install_docs = b.addInstallDirectory(.{
+            .source_dir = exe.getEmittedDocs(),
+            .install_dir = std.Build.InstallDir{ .custom = "../autodoc" },
+            .install_subdir = "",
+        });
+        docs_step.dependOn(&install_docs.step);
+    }
 }

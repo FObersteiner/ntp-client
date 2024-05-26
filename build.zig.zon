@@ -1,14 +1,14 @@
 .{
     .name = "ntp_client",
-    .version = "0.0.2",
+    .version = "0.0.4",
     .dependencies = .{
-        .clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/master.tar.gz",
-            .hash = "12204b2fb733b2de9184d1907032709e79c2595b4adc9bed12a8383b114d4c0da932",
-        },
         .zdt = .{
             .url = "https://codeberg.org/FObersteiner/zdt/archive/main.tar.gz",
-            .hash = "122028c7aca1f934d9ce81d07104e9d586c61f95890575f929831ce503b8b657c0d1",
+            .hash = "1220bddaa19778add96409dff52f49448162e3fb9742b1dc23b972f44059c4fdbab8",
+        },
+        .flags = .{
+            .url = "https://github.com/n0s4/flags/archive/main.tar.gz",
+            .hash = "1220d4df8d12234f6f471e5983c6fd7ef05d4b8049b3ecb36fa6815a3348e51c52dd",
         },
     },
     .paths = .{""},

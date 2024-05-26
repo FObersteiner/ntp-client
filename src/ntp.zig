@@ -61,6 +61,10 @@ const native_endian = @import("builtin").target.cpu.arch.endian();
 
 /// NTP packet has 48 bytes if extension and key / digest fields are excluded.
 pub const packet_len: usize = 48;
+/// Clock error estimate; only applicable is client makes repeated calls to a server
+pub const max_disp: f32 = 16.0; // [s]
+/// Too far away
+pub const max_stratum: u8 = 16;
 
 /// offset between the Unix epoch and the NTP epoch in seconds
 pub const epoch_offset: u32 = 2_208_988_800;
@@ -99,8 +103,10 @@ pub const Packet = packed struct {
         };
     }
 
-    /// Same as init but directly copies bytes into a buffer
+    /// Same as init but directly copies bytes into a buffer.
+    /// 'buf'must be sufficiently large to store ntp.packet_len.
     pub fn intiToBuffer(version: u8, set_xmt: bool, buf: []u8) void {
+        std.debug.assert(buf.len >= packet_len);
         const ntp_bytes: [packet_len]u8 = @bitCast(Packet.init(version, set_xmt));
         std.mem.copyForwards(u8, buf, ntp_bytes[0..]);
     }
@@ -128,8 +134,8 @@ test "packet" {
 }
 
 pub const NtpTime = struct {
-    seconds: u32, // big endian !
-    fraction: u32, // big endian !
+    seconds: u32,
+    fraction: u32,
 
     pub fn init(sec: u32, frac: u32) NtpTime {
         return .{ .seconds = sec, .fraction = frac };
@@ -153,6 +159,20 @@ pub const NtpTime = struct {
         const frac: i64 = (@as(i64, _fraction) * ns_per_s);
         const nsec = if (frac >= 0x80000000) (frac >> 32) + 1 else (frac >> 32);
         return ns + nsec;
+    }
+
+    pub fn timeShortToNanos(data: u32) u64 {
+        const _data = if (native_endian == .big) data else @byteSwap(data);
+        const nanos: u64 = (_data >> 16) * ns_per_s;
+        const fraction: u64 = (_data & 0xFFFF) * ns_per_s;
+        const nsfrac = if (fraction >= 0x8000) (fraction >> 16) + 1 else fraction >> 16;
+        return nanos + nsfrac;
+    }
+
+    pub fn precisionToNanos(data: i8) u64 {
+        if (data > 0) return ns_per_s << @as(u6, @intCast(data));
+        if (data < 0) return ns_per_s >> @as(u6, @intCast(-data));
+        return ns_per_s;
     }
 };
 
@@ -179,6 +199,16 @@ test "ntp time struct" {
     const ntpt1 = NtpTime.init(i, 0);
     const t2 = ntpt1.toUnixNanos();
     try testing.expectEqual(@as(i64, 86400_000_000_000), t2);
+
+    const max: u64 = (1 << 32) - 1;
+    _ = NtpTime.timeShortToNanos(@as(u32, max));
+
+    var p = NtpTime.precisionToNanos(0);
+    try testing.expectEqual(ns_per_s, p);
+    p = NtpTime.precisionToNanos(1);
+    try testing.expectEqual(ns_per_s * 2, p);
+    p = NtpTime.precisionToNanos(-1);
+    try testing.expectEqual(ns_per_s / 2, p);
 }
 
 /// Analyze an NTP packet received from a server.
@@ -189,8 +219,8 @@ pub const Result = struct {
     stratum: u8 = 0,
     poll: u8 = 0,
     precision: i8 = 0,
-    root_delay: u32 = 0,
-    root_dispersion: u32 = 0,
+    root_delay: u64 = 0,
+    root_dispersion: u64 = 0,
     ref_id: u32 = 0,
 
     /// time when the server's clock was last updated
@@ -203,52 +233,55 @@ pub const Result = struct {
     ts_xmt: i64 = 0,
     /// T4, when the packet was received and processed
     ts_processed: i64 = 0,
+    /// syncronization distance; rood delay / 2 + root dispersion
     /// offset of the local machine relative to the server
     theta: i64 = 0,
     /// round-trip delay
     delta: i64 = 0,
+    /// syncronization distance, i.e. error estimate of server clock
+    lambda: u64 = 0,
 
     pub fn fromPacket(p: Packet) Result {
         var result = Result{ .ts_processed = @truncate(std.time.nanoTimestamp()) };
-        result.ts_ref = NtpTime.init(p.ts_ref_s, p.ts_ref_frac).toUnixNanos();
-        result.ts_org = NtpTime.init(p.ts_org_s, p.ts_org_frac).toUnixNanos();
-        result.ts_rec = NtpTime.init(p.ts_rec_s, p.ts_rec_frac).toUnixNanos();
-        result.ts_xmt = NtpTime.init(p.ts_xmt_s, p.ts_xmt_frac).toUnixNanos();
-
-        // theta = T(B) - T(A) = 1/2 * [(T2-T1) + (T3-T4)]
-        result.theta = @divFloor(((result.ts_rec - result.ts_org) + (result.ts_xmt - result.ts_processed)), 2);
-        // delta = T(ABA) = (T4-T1) - (T3-T2)
-        result.delta = (result.ts_processed - result.ts_org) - (result.ts_xmt - result.ts_rec);
-
         result.leap_indicator = @truncate((p.li_vers_mode >> 6) & 3);
         result.version = @truncate((p.li_vers_mode >> 3) & 0x7);
         result.mode = @truncate(p.li_vers_mode & 7);
         result.stratum = p.stratum;
         result.poll = p.poll;
         result.precision = p.precision;
-        result.root_delay = if (native_endian == .big) p.root_delay else @byteSwap(p.root_delay);
-        result.root_dispersion = if (native_endian == .big) p.root_dispersion else @byteSwap(p.root_dispersion);
+        result.root_delay = NtpTime.timeShortToNanos(p.root_delay);
+        result.root_dispersion = NtpTime.timeShortToNanos(p.root_dispersion);
         result.ref_id = if (native_endian == .big) p.ref_id else @byteSwap(p.ref_id);
 
+        result.ts_ref = NtpTime.init(p.ts_ref_s, p.ts_ref_frac).toUnixNanos();
+        result.ts_org = NtpTime.init(p.ts_org_s, p.ts_org_frac).toUnixNanos();
+        result.ts_rec = NtpTime.init(p.ts_rec_s, p.ts_rec_frac).toUnixNanos();
+        result.ts_xmt = NtpTime.init(p.ts_xmt_s, p.ts_xmt_frac).toUnixNanos();
+        // theta = T(B) - T(A) = 1/2 * [(T2-T1) + (T3-T4)]
+        result.theta = @divFloor(((result.ts_rec - result.ts_org) + (result.ts_xmt - result.ts_processed)), 2);
+        // delta = T(ABA) = (T4-T1) - (T3-T2)
+        result.delta = (result.ts_processed - result.ts_org) - (result.ts_xmt - result.ts_rec);
+        result.lambda = result.root_dispersion +| result.root_delay / 2;
         return result;
     }
 
+    // TODO : add validate() - ref time fresh enough, stratum <= 16 etc.
+
+    // TODO : make this a pretty-printer that takes a formatter for the timestamps
     pub fn format(self: Result, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
+        const refid_bytes: [4]u8 = @bitCast(self.ref_id);
+        const prc: u64 = NtpTime.precisionToNanos(self.precision);
         const theat_f: f64 = @as(f64, @floatFromInt(self.theta)) / @as(f64, ns_per_s);
         const delta_f: f64 = @as(f64, @floatFromInt(self.delta)) / @as(f64, ns_per_s);
+        const lamda_f: f64 = @as(f64, @floatFromInt(self.lambda)) / @as(f64, ns_per_s);
         try writer.print(
             \\--- NPT query result --->
-            \\leap indicator: {d}
-            \\version: {d}
-            \\mode: {d}
-            \\stratum: {d}
-            \\poll: {d}
-            \\precision: {d}
-            \\root_delay: {d}
-            \\root_dispersion: {d}
-            \\ref_id: {d}
+            \\LI={d} VN={d} Mode={d} Stratum={d} Poll={d} Precision={d} ({d} ns)
+            \\ref_id: {d} ({any})
+            \\root_delay: {d} ns, root_dispersion: {d} ns
+            \\=> syncronization distance: {d} s
             \\---
             \\server last synced      : {d}
             \\orgigin timestamp  (T1) : {d}
@@ -256,8 +289,8 @@ pub const Result = struct {
             \\transmit timestamp (T3) : {d}
             \\process timestamp  (T4) : {d}
             \\---
-            \\offset to timserver: {d} ns ({d:.6} s)
-            \\round-trip delay:    {d} ns ({d:.6} s)
+            \\offset to timserver: {d:.6} s ({d} ns) 
+            \\round-trip delay:    {d:.6} s ({d} ns)
             \\<---
         ,
             .{
@@ -267,18 +300,21 @@ pub const Result = struct {
                 self.stratum,
                 self.poll,
                 self.precision,
+                prc,
+                self.ref_id,
+                refid_bytes,
                 self.root_delay,
                 self.root_dispersion,
-                self.ref_id,
+                lamda_f,
                 self.ts_ref,
                 self.ts_org,
                 self.ts_rec,
                 self.ts_xmt,
                 self.ts_processed,
-                self.theta,
                 theat_f,
-                self.delta,
+                self.theta,
                 delta_f,
+                self.delta,
             },
         );
     }
@@ -291,4 +327,14 @@ test "query result" {
     try testing.expect(res.delta >= 0);
     const now: i64 = @truncate(std.time.nanoTimestamp());
     try testing.expect(now >= res.ts_xmt);
+
+    // random bytes can be parsed
+    const rand = std.crypto.random;
+    var b: [packet_len]u8 = undefined;
+    var i: usize = 0;
+    while (i < 1_000_000) : (i += 1) {
+        rand.bytes(&b);
+        const r: Result = Packet.analyze(b);
+        std.mem.doNotOptimizeAway(r);
+    }
 }
