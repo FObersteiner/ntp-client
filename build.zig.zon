@@ -3,8 +3,8 @@
     .version = "0.0.6",
     .dependencies = .{
         .zdt = .{
-            .url = "https://codeberg.org/FObersteiner/zdt/archive/main.tar.gz",
-            .hash = "12205afa4f678b4176360ed45fb25e69c39f4a0b2e61e30745efb70ada3a96cc00b9",
+            .url = "https://codeberg.org/FObersteiner/zdt/archive/v0.1.2.tar.gz",
+            .hash = "1220888b19e66e7f259effe27893a6953379f1922278722011d01ef23b392d2bd1d6",
         },
         .flags = .{
             .url = "https://github.com/n0s4/flags/archive/main.tar.gz",

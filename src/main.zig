@@ -131,7 +131,9 @@ pub fn main() !void {
         }
 
         const result: ntp.Result = ntp.Packet.analyze(buf[0..ntp.packet_len].*);
-        println("Server address: {any}\n", .{dst});
+        println("Server name: {s}", .{cli.flags.server});
+        println("Server address: {any}", .{dst});
+        println("---", .{});
 
         try pprint(io.getStdOut().writer(), result, &tz);
 
