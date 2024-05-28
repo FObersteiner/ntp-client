@@ -1,10 +1,10 @@
 .{
     .name = "ntp_client",
-    .version = "0.0.4",
+    .version = "0.0.6",
     .dependencies = .{
         .zdt = .{
             .url = "https://codeberg.org/FObersteiner/zdt/archive/main.tar.gz",
-            .hash = "1220d1d998e7aa634459f3041e111c22aae892d3b2a3d8270ebfc11ca21a3f9cd083",
+            .hash = "12205afa4f678b4176360ed45fb25e69c39f4a0b2e61e30745efb70ada3a96cc00b9",
         },
         .flags = .{
             .url = "https://github.com/n0s4/flags/archive/main.tar.gz",

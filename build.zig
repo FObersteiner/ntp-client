@@ -23,7 +23,8 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
-    //    exe.linkLibC(); // needed for DNS query
+    // for Windows compatibility, link libc since used by zdt
+    exe.linkLibC();
 
     exe.root_module.addImport("flags", flags_module);
     exe.root_module.addImport("zdt", zdt_module);

@@ -52,26 +52,30 @@
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //
 // NOTE : only fields up to and including Transmit Timestamp are used further on.
-// Extensions are not supported.
+// Extensions are not supported (yet).
 //
 const std = @import("std");
 const print = std.debug.print;
 const testing = std.testing;
 const native_endian = @import("builtin").target.cpu.arch.endian();
 
-/// NTP packet has 48 bytes if extension and key / digest fields are excluded.
-pub const packet_len: usize = 48;
-/// Clock error estimate; only applicable is client makes repeated calls to a server
-pub const max_disp: f32 = 16.0; // [s]
-/// Too far away
-pub const max_stratum: u8 = 16;
-
-/// offset between the Unix epoch and the NTP epoch in seconds
-pub const epoch_offset: u32 = 2_208_988_800;
-
 const ns_per_s: u64 = 1_000_000_000;
 const client_mode: u8 = 3;
 
+/// NTP packet has 48 bytes if extension and key / digest fields are excluded.
+pub const packet_len: usize = 48;
+
+/// Clock error estimate; only applicable if client makes repeated calls to a server.
+pub const max_disp: f32 = 16.0; // [s]
+
+/// Too far away.
+pub const max_stratum: u8 = 16;
+
+/// Offset between the Unix epoch and the NTP epoch in seconds.
+pub const epoch_offset: u32 = 2_208_988_800;
+
+/// struct equivalent of the NPT packet definition.
+/// Byte order is big endian (network).
 pub const Packet = packed struct {
     li_vers_mode: u8, // 2 bits leap second indicator, 3 bits protocol version, 3 bits mode
     stratum: u8 = 0,
@@ -133,6 +137,9 @@ test "packet" {
     try testing.expect(std.meta.eql(want, have));
 }
 
+/// NTP's representation of an epoch time.
+/// 32 bits (uint) for the seconds since 1900-01-01 Z and 32 bits (uint) for the fractional part.
+/// Byte order is big endian (network).
 pub const NtpTime = struct {
     seconds: u32,
     fraction: u32,
@@ -141,6 +148,8 @@ pub const NtpTime = struct {
         return .{ .seconds = sec, .fraction = frac };
     }
 
+    /// Convert nanoseconds since the Unix epoch to NTP time.
+    /// Accounts for native byte order; network is big endian while native might be little.
     pub fn fromUnixNanos(nanos: i128) NtpTime { // use i128 here since this is what std.time.nanoTimestamp gives use
         const _secs: i64 = @truncate(@divFloor(nanos, @as(i128, ns_per_s)) + epoch_offset);
         const secs: u32 = if (_secs < 0) 0 else @intCast(_secs);
@@ -152,6 +161,8 @@ pub const NtpTime = struct {
         };
     }
 
+    /// Convert NTP time to nanoseconds since the Unix epoch.
+    /// Accounts for native byte order; network is big endian while native might be little.
     pub fn toUnixNanos(self: NtpTime) i64 {
         const _seconds = if (native_endian == .big) self.seconds else @byteSwap(self.seconds);
         const _fraction = if (native_endian == .big) self.fraction else @byteSwap(self.fraction);
@@ -161,6 +172,9 @@ pub const NtpTime = struct {
         return ns + nsec;
     }
 
+    /// 'time short' is NTP's representation of a duration;
+    /// 16 bits for seconds and 16 bits for a fractional part.
+    /// Accounts for native byte order; network is big endian while native might be little.
     pub fn timeShortToNanos(data: u32) u64 {
         const _data = if (native_endian == .big) data else @byteSwap(data);
         const nanos: u64 = (_data >> 16) * ns_per_s;
@@ -169,6 +183,7 @@ pub const NtpTime = struct {
         return nanos + nsfrac;
     }
 
+    /// Parse NTP 'time short' duration to nanoseconds.
     pub fn precisionToNanos(data: i8) u64 {
         if (data > 0) return ns_per_s << @as(u6, @intCast(data));
         if (data < 0) return ns_per_s >> @as(u6, @intCast(-data));
@@ -233,6 +248,7 @@ pub const Result = struct {
     ts_xmt: i64 = 0,
     /// T4, when the packet was received and processed
     ts_processed: i64 = 0,
+
     /// syncronization distance; rood delay / 2 + root dispersion
     /// offset of the local machine relative to the server
     theta: i64 = 0,
@@ -267,57 +283,6 @@ pub const Result = struct {
 
     // TODO : add validate() - ref time fresh enough, stratum <= 16 etc.
 
-    // TODO : make this a pretty-printer that takes a formatter for the timestamps
-    pub fn format(self: Result, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-        const refid_bytes: [4]u8 = @bitCast(self.ref_id);
-        const prc: u64 = NtpTime.precisionToNanos(self.precision);
-        const theat_f: f64 = @as(f64, @floatFromInt(self.theta)) / @as(f64, ns_per_s);
-        const delta_f: f64 = @as(f64, @floatFromInt(self.delta)) / @as(f64, ns_per_s);
-        const lamda_f: f64 = @as(f64, @floatFromInt(self.lambda)) / @as(f64, ns_per_s);
-        try writer.print(
-            \\--- NPT query result --->
-            \\LI={d} VN={d} Mode={d} Stratum={d} Poll={d} Precision={d} ({d} ns)
-            \\ref_id: {d} ({any})
-            \\root_delay: {d} ns, root_dispersion: {d} ns
-            \\=> syncronization distance: {d} s
-            \\---
-            \\server last synced      : {d}
-            \\orgigin timestamp  (T1) : {d}
-            \\reception timstamp (T2) : {d}
-            \\transmit timestamp (T3) : {d}
-            \\process timestamp  (T4) : {d}
-            \\---
-            \\offset to timserver: {d:.6} s ({d} ns) 
-            \\round-trip delay:    {d:.6} s ({d} ns)
-            \\<---
-        ,
-            .{
-                self.leap_indicator,
-                self.version,
-                self.mode,
-                self.stratum,
-                self.poll,
-                self.precision,
-                prc,
-                self.ref_id,
-                refid_bytes,
-                self.root_delay,
-                self.root_dispersion,
-                lamda_f,
-                self.ts_ref,
-                self.ts_org,
-                self.ts_rec,
-                self.ts_xmt,
-                self.ts_processed,
-                theat_f,
-                self.theta,
-                delta_f,
-                self.delta,
-            },
-        );
-    }
 };
 
 test "query result" {

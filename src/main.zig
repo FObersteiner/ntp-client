@@ -1,7 +1,7 @@
 // Copyright © 2024 Florian Obersteiner <f.obersteiner@posteo.de>
 // License: see LICENSE in the root directory of the repo.
 //
-// ~~~ NTP query CLI app ~~~
+// ~~~ NTP query CLI ~~~
 //
 const std = @import("std");
 const io = std.io;
@@ -13,14 +13,14 @@ const zdt = @import("zdt");
 const Datetime = zdt.Datetime;
 const Timezone = zdt.Timezone;
 const Resolution = zdt.Duration.Resolution;
+const Cmd = @import("cmd.zig");
 const ntp = @import("ntp.zig");
+const pprint = @import("prettyprint.zig").pprint_result;
 
 test {
     _ = ntp;
 }
 
-//-----------------------------------------------------------------------------
-const default_server: []const u8 = "pool.ntp.org";
 //-----------------------------------------------------------------------------
 const mtu: usize = 1024; // buffer size for transmission
 const ms: u64 = 1_000_000;
@@ -33,13 +33,11 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var args = std.process.args();
-    const cli = flags.parse(&args, Cmd);
+    // for Windows compatibility: feed an allocator for args parsing
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
 
-    const server_url = if (cli.args.len >= 1)
-        cli.args[0]
-    else
-        default_server;
+    const cli = flags.parse(&args, Cmd);
 
     const port: u16 = cli.flags.port;
     const proto_vers: u8 = cli.flags.protocol_version;
@@ -64,8 +62,8 @@ pub fn main() !void {
     // ------------------------------------------------------------------------
 
     // resolve hostname
-    const addrlist = net.getAddressList(allocator, server_url, port) catch {
-        return errprintln("invalid hostname '{s}'", .{server_url});
+    const addrlist = net.getAddressList(allocator, cli.flags.server, port) catch {
+        return errprintln("invalid hostname '{s}'", .{cli.flags.server});
     };
     defer addrlist.deinit();
     if (addrlist.canon_name) |n| println("Query server: {s}", .{n});
@@ -132,31 +130,10 @@ pub fn main() !void {
             continue :iter_addrs;
         }
 
-        // TODO move the whole printing stuff to a pretty-printer method of the result
-        println("Server address: {any}", .{dst});
         const result: ntp.Result = ntp.Packet.analyze(buf[0..ntp.packet_len].*);
-        println("\n{s}\n", .{result});
-        println(
-            "Server last synced  : {s}",
-            .{try Datetime.fromUnix(result.ts_ref, Resolution.nanosecond, tz)},
-        );
-        println(
-            "T1, packet created  : {s}",
-            .{try Datetime.fromUnix(result.ts_org, Resolution.nanosecond, tz)},
-        );
-        println(
-            "T2, server received : {s}",
-            .{try Datetime.fromUnix(result.ts_rec, Resolution.nanosecond, tz)},
-        );
-        println(
-            "T3, server replied  : {s}",
-            .{try Datetime.fromUnix(result.ts_xmt, Resolution.nanosecond, tz)},
-        );
-        println(
-            "T4, reply received  : {s}",
-            .{try Datetime.fromUnix(result.ts_processed, Resolution.nanosecond, tz)},
-        );
-        if (!std.mem.eql(u8, tz.name(), "UTC")) println("Time zone displayed : {s}", .{tz.name()});
+        println("Server address: {any}\n", .{dst});
+
+        try pprint(io.getStdOut().writer(), result, &tz);
 
         if (!cli.flags.all) break :iter_addrs;
     }
@@ -175,35 +152,3 @@ fn errprintln(comptime fmt: []const u8, args: anytype) void {
     const stderr = io.getStdErr().writer();
     nosuspend stderr.print(fmt ++ "\n", args) catch return;
 }
-
-// config struct for the flags package argument parser
-const Cmd = struct {
-    pub const name = "ntp_client <NTP-server-name>";
-    port: u16 = 123,
-    protocol_version: u8 = 4,
-    all: bool = false,
-    src_ip: []const u8 = "0.0.0.0",
-    src_port: u16 = 0,
-    timezone: []const u8 = "UTC",
-
-    pub const help = (
-        \\Arguments:
-        \\    <NTP-server-name>    Name of the NTP server to query. The default is "pool.ntp.org".
-    );
-
-    pub const descriptions = .{
-        .port = "UDP port to use for NTP query (default: 123).",
-        .protocol_version = "NTP protocol version, 3 or 4 (default: 4).",
-        .all = "Query all IP addresses found for a given server URL (default: false / stop after first).",
-        .src_ip = "IP address to use for sending the query (default: 0.0.0.0 / auto-select).",
-        .src_port = "UDP port to use for sending the query (default: 0 / any port).",
-        .timezone = "Timezone to use in results display (default: UTC)",
-    };
-
-    pub const switches = .{
-        .port = 'p',
-        .protocol_version = 'v',
-        .all = 'a',
-        .timezone = 'z',
-    };
-};
