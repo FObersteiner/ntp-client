@@ -18,7 +18,7 @@ Options:
 
 ## Compatibility and Requirements
 
-Developed & tested on Linux. Currently does not work on Windows since uses socket instance from `std.posix`. Other operating systems? Mac OS might work but otherwise: no idea, give it a try!
+Developed & tested on Linux. Other operating systems? Mac OS might work, Windows also. Otherwise: no idea, give it a try!
 
 ### Zig
 
