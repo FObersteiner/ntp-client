@@ -1,5 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.ntp_client_build);
+const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 7 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -19,12 +20,13 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .version = client_version,
     });
 
     b.installArtifact(exe);
 
-    // for Windows compatibility, link libc since used by zdt
-    exe.linkLibC();
+    // for Windows compatibility, required by sockets functionality
+    // exe.linkLibC();
 
     exe.root_module.addImport("flags", flags_module);
     exe.root_module.addImport("zdt", zdt_module);

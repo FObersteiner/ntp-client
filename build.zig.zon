@@ -1,14 +1,14 @@
 .{
     .name = "ntp_client",
-    .version = "0.0.6",
+    .version = "0.0.7",
     .dependencies = .{
         .zdt = .{
-            .url = "https://codeberg.org/FObersteiner/zdt/archive/v0.1.2.tar.gz",
-            .hash = "1220888b19e66e7f259effe27893a6953379f1922278722011d01ef23b392d2bd1d6",
+            .url = "https://codeberg.org/FObersteiner/zdt/archive/v0.1.3-pre.tar.gz",
+            .hash = "1220c244f66da0850c257d9d0c4a88f160992d76078c4e812b9ca16614cdc9961086",
         },
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/main.tar.gz",
-            .hash = "1220d4df8d12234f6f471e5983c6fd7ef05d4b8049b3ecb36fa6815a3348e51c52dd",
+            .url = "https://github.com/n0s4/flags/archive/refs/tags/v0.5.0.tar.gz",
+            .hash = "12202e9d5de187569b77064c66a4972e8a824488295fab2f5c8cb48331eab9877257",
         },
     },
     .paths = .{""},

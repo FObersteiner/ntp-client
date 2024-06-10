@@ -1,4 +1,6 @@
-/zig-cache/
-/zig-out/
-/autodoc/
+zig-cache/
+.zig-cache/
+zig-out/
+autodoc/
+.old/
 

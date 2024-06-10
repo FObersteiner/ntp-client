@@ -7,11 +7,9 @@ const Resolution = zdt.Duration.Resolution;
 
 const ns_per_s: u64 = 1_000_000_000;
 
-// TODO : add JSON output
-
-// pretty-print an npt-results struct
+// pretty-print an ntp-results struct
 pub fn pprint_result(writer: anytype, ntpr: ntp.Result, tz: ?*Timezone) !void {
-    const prc: u64 = ntp.NtpTime.precisionToNanos(ntpr.precision);
+    const prc: u64 = ntp.precisionToNanos(ntpr.precision);
     const theat_f: f64 = @as(f64, @floatFromInt(ntpr.theta)) / @as(f64, ns_per_s);
     const delta_f: f64 = @as(f64, @floatFromInt(ntpr.delta)) / @as(f64, ns_per_s);
     const lamda_f: f64 = @as(f64, @floatFromInt(ntpr.lambda)) / @as(f64, ns_per_s);
@@ -30,7 +28,7 @@ pub fn pprint_result(writer: anytype, ntpr: ntp.Result, tz: ?*Timezone) !void {
         \\T2, server received : {s}
         \\T3, server replied  : {s}
         \\T4, reply received  : {s}
-        \\(timezone displayed : {s})
+        \\(timezone displayed: {s})
         \\---
         \\offset to timserver: {d:.6} s ({d} ns) 
         \\round-trip delay:    {d:.6} s ({d} ns)
@@ -49,11 +47,11 @@ pub fn pprint_result(writer: anytype, ntpr: ntp.Result, tz: ?*Timezone) !void {
             ntpr.root_delay,
             ntpr.root_dispersion,
             lamda_f,
-            try Datetime.fromUnix(ntpr.ts_ref, Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.ts_org, Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.ts_rec, Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.ts_xmt, Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.ts_processed, Resolution.nanosecond, z.*),
+            try Datetime.fromUnix(ntpr.Tref.toUnixNanos(), Resolution.nanosecond, z.*),
+            try Datetime.fromUnix(ntpr.T1.toUnixNanos(), Resolution.nanosecond, z.*),
+            try Datetime.fromUnix(ntpr.T2.toUnixNanos(), Resolution.nanosecond, z.*),
+            try Datetime.fromUnix(ntpr.T3.toUnixNanos(), Resolution.nanosecond, z.*),
+            try Datetime.fromUnix(ntpr.T4.toUnixNanos(), Resolution.nanosecond, z.*),
             z.name(),
             theat_f,
             ntpr.theta,
