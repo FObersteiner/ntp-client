@@ -63,25 +63,23 @@ pub fn main() !void {
     if (addrlist.canon_name) |n| println("Query server: {s}", .{n});
 
     // from where to send the query
-    const addr_src = try std.net.Address.parseIp(cli.flags.src_ip, cli.flags.src_port);
+    const addr_src = try std.net.Address.resolveIp(cli.flags.src_ip, cli.flags.src_port);
 
     const sock = try posix.socket(
-        addr_src.any.family, // might be IPv6
+        addr_src.any.family,
         // Notes on flags:
-        // NONBLOCK is used to create timeout behavior.
+        // NONBLOCK can be used to create timeout behavior.
         // CLOEXEC not strictly needed here; see open(2) man page.
-        posix.SOCK.DGRAM | posix.SOCK.CLOEXEC, // | posix.SOCK.NONBLOCK
+        posix.SOCK.DGRAM | posix.SOCK.CLOEXEC,
         posix.IPPROTO.UDP,
     );
     try posix.bind(sock, &addr_src.any, addr_src.getOsSockLen());
-    // NOTE : since this is a one-shot program, we would not have to close the socket.
-    // The OS could clean up for us.
     defer posix.close(sock);
 
     var buf: [mtu]u8 = std.mem.zeroes([mtu]u8);
 
     iter_addrs: for (addrlist.addrs) |dst| {
-        var dst_addr_sock = dst.any;
+        var dst_addr_sock: posix.sockaddr = undefined; // must not use dst.any
         var dst_addr_len: posix.socklen_t = dst.getOsSockLen();
 
         ntp.Packet.toBytesBuffer(proto_vers, true, &buf);
@@ -89,7 +87,7 @@ pub fn main() !void {
             sock,
             buf[0..ntp.packet_len],
             0,
-            &dst_addr_sock,
+            &dst.any, // &dst_addr_sock,
             dst_addr_len,
         ) catch |err| switch (err) {
             error.AddressFamilyNotSupported => {

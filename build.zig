@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.ntp_client_build);
-const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 7 };
+const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 8 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // for Windows compatibility, required by sockets functionality
-    // exe.linkLibC();
+    exe.linkLibC();
 
     exe.root_module.addImport("flags", flags_module);
     exe.root_module.addImport("zdt", zdt_module);

@@ -1,9 +1,9 @@
 //! NTP client library
 const std = @import("std");
+const mem = std.mem;
 const print = std.debug.print;
 const testing = std.testing;
 const assert = std.debug.assert;
-const native_endian = @import("builtin").target.cpu.arch.endian();
 
 const ns_per_s: u64 = 1_000_000_000;
 
@@ -256,24 +256,22 @@ pub const Packet = packed struct {
     pub fn toBytesBuffer(version: u8, set_xmt: bool, buf: []u8) void {
         assert(buf.len >= packet_len);
         var p: Packet = Packet._init(version, set_xmt);
-        if (native_endian == .little) p.ts_xmt = @byteSwap(p.ts_xmt);
+        p.ts_xmt = mem.nativeToBig(u64, p.ts_xmt);
         const ntp_bytes: [packet_len]u8 = @bitCast(p);
-        std.mem.copyForwards(u8, buf, ntp_bytes[0..]);
+        mem.copyForwards(u8, buf, ntp_bytes[0..]);
     }
 
     /// Parse bytes of the reply received from the server.
     /// Adjusts for byte order.
     pub fn parse(bytes: [packet_len]u8) Packet {
         var p: Packet = @bitCast(bytes);
-        if (native_endian == .little) {
-            p.root_delay = @byteSwap(p.root_delay);
-            p.root_dispersion = @byteSwap(p.root_dispersion);
-            p.ref_id = @byteSwap(p.ref_id);
-            p.ts_ref = @byteSwap(p.ts_ref);
-            p.ts_org = @byteSwap(p.ts_org);
-            p.ts_rec = @byteSwap(p.ts_rec);
-            p.ts_xmt = @byteSwap(p.ts_xmt);
-        }
+        p.root_delay = mem.bigToNative(u32, p.root_delay);
+        p.root_dispersion = mem.bigToNative(u32, p.root_dispersion);
+        p.ref_id = mem.bigToNative(u32, p.ref_id);
+        p.ts_ref = mem.bigToNative(u64, p.ts_ref);
+        p.ts_org = mem.bigToNative(u64, p.ts_org);
+        p.ts_rec = mem.bigToNative(u64, p.ts_rec);
+        p.ts_xmt = mem.bigToNative(u64, p.ts_xmt);
         return p;
     }
 };
@@ -282,12 +280,6 @@ test "Packet" {
     const p = Packet._init(3, true);
     const b: [packet_len]u8 = @bitCast(p);
     try testing.expectEqual(@as(u8, 27), b[0]);
-
-    // b = [packet_len]u8{ 28, 2, 3, 231, 0, 0, 2, 221, 0, 0, 7, 211, 192, 53, 103, 108, 234, 10, 216, 64, 237, 98, 61, 18, 234, 10, 220, 65, 194, 44, 176, 0, 234, 10, 220, 65, 223, 165, 143, 37, 234, 10, 220, 65, 223, 166, 34, 232 };
-    // const have: Packet = Packet.parse(b);
-    // print("{any}\n", .{have});
-    // print("{d}\n", .{Time.fromRaw(have.ts_rec).decode()});
-    // print("{d}\n", .{Time.fromRaw(have.ts_ref).toUnixNanos()});
 }
 
 /// Analyze an NTP packet received from a server.
