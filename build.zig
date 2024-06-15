@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.ntp_client_build);
-const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 8 };
+const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 9 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
