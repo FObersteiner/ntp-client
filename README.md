@@ -26,8 +26,6 @@ Developed & tested on Linux. Windows should work (build.zig links libc for this)
 
 This package is developed with Zig `0.14.0-dev`, might not compile with older versions. As of 2024-06-15, Zig-0.12 and Zig-0.13 (both stable) should work.
 
-Currently works with `0.12-stable` and `master`.
-
 ## Dependencies
 
 - [flags](https://github.com/n0s4/flags) for command line argument parsing
