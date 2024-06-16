@@ -6,22 +6,22 @@ const Timezone = zdt.Timezone;
 const Resolution = zdt.Duration.Resolution;
 
 const ns_per_s: u64 = 1_000_000_000;
+const ns_per_us: u64 = 1_000;
 
 // pretty-print an ntp-results struct
 pub fn pprint_result(writer: anytype, ntpr: ntp.Result, tz: ?*Timezone) !void {
     const prc: u64 = ntp.precisionToNanos(ntpr.precision);
-    const theat_f: f64 = @as(f64, @floatFromInt(ntpr.theta)) / @as(f64, ns_per_s);
-    const delta_f: f64 = @as(f64, @floatFromInt(ntpr.delta)) / @as(f64, ns_per_s);
-    const lamda_f: f64 = @as(f64, @floatFromInt(ntpr.lambda)) / @as(f64, ns_per_s);
+    const offset_f: f64 = @as(f64, @floatFromInt(ntpr.offset)) / @as(f64, ns_per_s);
+    const delay_f: f64 = @as(f64, @floatFromInt(ntpr.delay)) / @as(f64, ns_per_s);
+    // const disp_f: f64 = @as(f64, @floatFromInt(ntpr.lambda)) / @as(f64, ns_per_s);
     var z: *Timezone = if (tz == null) @constCast(&Timezone.UTC) else tz.?;
 
     try writer.print(
         \\NPT query result:
-        \\---
+        \\---***---
         \\LI={d} VN={d} Mode={d} Stratum={d} Poll={d} Precision={d} ({d} ns)
         \\ref_id: {d}
-        \\root_delay: {d} ns, root_dispersion: {d} ns
-        \\=> syncronization distance: {d} s
+        \\root_delay: {d} us, root_dispersion: {d} us
         \\---
         \\Server last synced  : {s}
         \\T1, packet created  : {s}
@@ -30,9 +30,9 @@ pub fn pprint_result(writer: anytype, ntpr: ntp.Result, tz: ?*Timezone) !void {
         \\T4, reply received  : {s}
         \\(timezone displayed: {s})
         \\---
-        \\offset to timserver: {d:.6} s ({d} ns) 
-        \\round-trip delay:    {d:.6} s ({d} ns)
-        \\---
+        \\offset to timserver: {d:.3} s ({d} us) 
+        \\round-trip delay:    {d:.3} s ({d} us)
+        \\---***---
         \\
     ,
         .{
@@ -44,19 +44,18 @@ pub fn pprint_result(writer: anytype, ntpr: ntp.Result, tz: ?*Timezone) !void {
             ntpr.precision,
             prc,
             ntpr.ref_id,
-            ntpr.root_delay,
-            ntpr.root_dispersion,
-            lamda_f,
+            ntpr.root_delay / ns_per_us,
+            ntpr.root_dispersion / ns_per_us,
             try Datetime.fromUnix(ntpr.Tref.toUnixNanos(), Resolution.nanosecond, z.*),
             try Datetime.fromUnix(ntpr.T1.toUnixNanos(), Resolution.nanosecond, z.*),
             try Datetime.fromUnix(ntpr.T2.toUnixNanos(), Resolution.nanosecond, z.*),
             try Datetime.fromUnix(ntpr.T3.toUnixNanos(), Resolution.nanosecond, z.*),
             try Datetime.fromUnix(ntpr.T4.toUnixNanos(), Resolution.nanosecond, z.*),
             z.name(),
-            theat_f,
-            ntpr.theta,
-            delta_f,
-            ntpr.delta,
+            offset_f,
+            @divFloor(ntpr.offset, ns_per_us),
+            delay_f,
+            @divFloor(ntpr.delay, ns_per_us),
         },
     );
 }

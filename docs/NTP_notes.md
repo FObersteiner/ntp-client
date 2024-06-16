@@ -8,56 +8,6 @@
 - <https://github.com/beevik/ntp>
 - <https://lettier.github.io/posts/2016-04-26-lets-make-a-ntp-client-in-c.html>
 
-NTP v4 data format, from <https://datatracker.ietf.org/doc/html/rfc5905>:
-
-```text
-0                   1                   2                   3
-0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|LI | VN  |Mode |    Stratum     |     Poll      |  Precision   |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                         Root Delay                            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                         Root Dispersion                       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                          Reference ID                         |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-+                     Reference Timestamp (64)                  +
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-+                      Origin Timestamp (64)                    +
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-+                      Receive Timestamp (64)                   +
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-+                      Transmit Timestamp (64)                  +
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-.                                                               .
-.                    Extension Field 1 (variable)               .
-.                                                               .
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-.                                                               .
-.                    Extension Field 2 (variable)               .
-.                                                               .
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                          Key Identifier                       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-|                            dgst (128)                         |
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
-
 ## limits
 
 Only fields up to and including Transmit Timestamp are used further on.
@@ -80,4 +30,104 @@ Extensions are not supported (yet).
 
 ## on Linux
 
-On a Linux running timedatectl, check via `timedatectl timesync-status`
+On a Linux running `timedatectl`, check via `timedatectl timesync-status`
+
+## Specs
+
+NTP v4 data format, <https://datatracker.ietf.org/doc/html/rfc5905>
+
+### Packet
+
+```text
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |LI | VN  |Mode |    Stratum     |     Poll      |  Precision   |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                         Root Delay                            |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                         Root Dispersion                       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                          Reference ID                         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                     Reference Timestamp (64)                  +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                      Origin Timestamp (64)                    +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                      Receive Timestamp (64)                   +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                      Transmit Timestamp (64)                  +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    .                                                               .
+    .                    Extension Field 1 (variable)               .
+    .                                                               .
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    .                                                               .
+    .                    Extension Field 2 (variable)               .
+    .                                                               .
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                          Key Identifier                       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |                            dgst (128)                         |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+### Kiss Codes
+
+```text
+    +------+------------------------------------------------------------+
+    | Code |                           Meaning                          |
+    +------+------------------------------------------------------------+
+    | ACST | The association belongs to a unicast server.               |
+    | AUTH | Server authentication failed.                              |
+    | AUTO | Autokey sequence failed.                                   |
+    | BCST | The association belongs to a broadcast server.             |
+    | CRYP | Cryptographic authentication or identification failed.     |
+    | DENY | Access denied by remote server.                            |
+    | DROP | Lost peer in symmetric mode.                               |
+    | RSTR | Access denied due to local policy.                         |
+    | INIT | The association has not yet synchronized for the first     |
+    |      | time.                                                      |
+    | MCST | The association belongs to a dynamically discovered server.|
+    | NKEY | No key found. Either the key was never installed or is     |
+    |      | not trusted.                                               |
+    | RATE | Rate exceeded. The server has temporarily denied access    |
+    |      | because the client exceeded the rate threshold.            |
+    | RMOT | Alteration of association from a remote host running       |
+    |      | ntpdc.                                                     |
+    | STEP | A step change in system time has occurred, but the         |
+    |      | association has not yet resynchronized.                    |
+    +------+------------------------------------------------------------+
+```
+
+### Globals / Boundaries
+
+```text
+    +-----------+-------+----------------------------------+
+    | Name      | Value | Description                      |
+    +-----------+-------+----------------------------------+
+    | PORT      | 123   | NTP port number                  |
+    | VERSION   | 4     | NTP version number               |
+    | TOLERANCE | 15e-6 | frequency tolerance PHI (s/s)    |
+    | MINPOLL   | 4     | minimum poll exponent (16 s)     |
+    | MAXPOLL   | 17    | maximum poll exponent (36 h)     |
+    | MAXDISP   | 16    | maximum dispersion (16 s)        |
+    | MINDISP   | .005  | minimum dispersion increment (s) |
+    | MAXDIST   | 1     | distance threshold (1 s)         |
+    | MAXSTRAT  | 16    | maximum stratum number           |
+    +-----------+-------+----------------------------------+
+```

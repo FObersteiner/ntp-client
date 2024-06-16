@@ -1,6 +1,6 @@
 .{
     .name = "ntp_client",
-    .version = "0.0.9",
+    .version = "0.0.11",
     .dependencies = .{
         .zdt = .{
             .url = "https://codeberg.org/FObersteiner/zdt/archive/v0.1.3.tar.gz",

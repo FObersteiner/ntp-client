@@ -18,9 +18,11 @@ test {
     _ = ntp;
 }
 
-//-----------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
+const timeout_sec: isize = 5; // wait-for-reply timeout
 const mtu: usize = 1024; // buffer size for transmission
-//-----------------------------------------------------------------------------
+const poll_int: u8 = 0; // one-shot program, do not set poll interval
+// ------------------------------------------------------------------------------------
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -53,7 +55,7 @@ pub fn main() !void {
         }
     }
 
-    // ------------------------------------------------------------------------
+    // --- prepare connection ---------------------------------------------------------
 
     // resolve hostname
     const addrlist = net.getAddressList(allocator, cli.flags.server, port) catch {
@@ -67,8 +69,6 @@ pub fn main() !void {
 
     const sock = try posix.socket(
         addr_src.any.family,
-        // Notes on flags:
-        // NONBLOCK can be used to create timeout behavior.
         // CLOEXEC not strictly needed here; see open(2) man page.
         posix.SOCK.DGRAM | posix.SOCK.CLOEXEC,
         posix.IPPROTO.UDP,
@@ -76,18 +76,33 @@ pub fn main() !void {
     try posix.bind(sock, &addr_src.any, addr_src.getOsSockLen());
     defer posix.close(sock);
 
+    if (timeout_sec != 0) { // make this configurable ? ...0 would mean no timeout
+        try posix.setsockopt(
+            sock,
+            posix.SOL.SOCKET,
+            posix.SO.RCVTIMEO,
+            &std.mem.toBytes(posix.timespec{ .tv_sec = timeout_sec, .tv_nsec = 0 }),
+        );
+    }
+
+    // --- query server(s) ------------------------------------------------------------
+
     var buf: [mtu]u8 = std.mem.zeroes([mtu]u8);
 
-    iter_addrs: for (addrlist.addrs) |dst| {
+    iter_addrs: for (addrlist.addrs, 0..) |dst, i| {
         var dst_addr_sock: posix.sockaddr = undefined; // must not use dst.any
         var dst_addr_len: posix.socklen_t = dst.getOsSockLen();
 
-        ntp.Packet.toBytesBuffer(proto_vers, true, &buf);
+        ntp.Packet.toBytesBuffer(proto_vers, poll_int, &buf);
+
+        // packet created!
+        const T1: ntp.Time = ntp.Time.fromUnixNanos(@as(u64, @intCast(std.time.nanoTimestamp())));
+
         _ = posix.sendto(
             sock,
             buf[0..ntp.packet_len],
             0,
-            &dst.any, // &dst_addr_sock,
+            &dst.any,
             dst_addr_len,
         ) catch |err| switch (err) {
             error.AddressFamilyNotSupported => {
@@ -100,23 +115,33 @@ pub fn main() !void {
             else => |e| return e,
         };
 
-        const n_recv: usize = try posix.recvfrom(
+        const n_recv: usize = posix.recvfrom(
             sock,
             buf[0..],
             0,
             &dst_addr_sock,
             &dst_addr_len,
-        );
+        ) catch |err| switch (err) {
+            error.WouldBlock => {
+                println("Error: connection timed out", .{});
+                if (i < addrlist.addrs.len - 1) println("Try next server.", .{});
+                continue :iter_addrs;
+            },
+            else => |e| return e,
+        };
 
-        const ts_dst = std.time.nanoTimestamp();
+        // reply received!
+        const T4: ntp.Time = ntp.Time.fromUnixNanos(@as(u64, @intCast(std.time.nanoTimestamp())));
 
         if (n_recv != ntp.packet_len) {
-            println("invalid reply length, try next server.", .{});
+            println("Error: invalid reply length", .{});
+            if (i < addrlist.addrs.len - 1) println("Try next server.", .{});
             continue :iter_addrs;
         }
 
         const p_result: ntp.Packet = ntp.Packet.parse(buf[0..ntp.packet_len].*);
-        const result: ntp.Result = ntp.Result.fromPacket(p_result, ts_dst);
+        const result: ntp.Result = ntp.Result.fromPacket(p_result, T1, T4);
+
         println("Server name: {s}", .{cli.flags.server});
         println("Server address: {any}", .{dst});
         println("---", .{});
@@ -127,7 +152,7 @@ pub fn main() !void {
     }
 }
 
-//-----------------------------------------------------------------------------
+// --- helpers ------------------------------------------------------------------------
 
 /// Print to stdout with trailing newline, unbuffered, and silently returning on failure.
 fn println(comptime fmt: []const u8, args: anytype) void {

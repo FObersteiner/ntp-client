@@ -2,7 +2,10 @@
 
 # NTP Client
 
-Command line app to query an NTP server, to verify your OS clock setting. The original repository is hosted [on Codeberg](https://codeberg.org/FObersteiner/ntp_client).
+Command line app to query an NTP server, to verify your OS clock setting.
+
+- [on Codeberg](https://codeberg.org/FObersteiner/ntp_client)
+- [on github](https://github.com/FObersteiner/ntp-client)
 
 ```text
 Usage: ntp_client [options]
