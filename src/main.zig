@@ -14,6 +14,7 @@ const Resolution = zdt.Duration.Resolution;
 const Cmd = @import("cmd.zig");
 const ntp = @import("ntp.zig");
 const pprint = @import("prettyprint.zig").pprint_result;
+const jsonprint = @import("prettyprint.zig").jsonprint_result;
 test {
     _ = ntp;
 }
@@ -21,7 +22,6 @@ test {
 // ------------------------------------------------------------------------------------
 const timeout_sec: isize = 5; // wait-for-reply timeout
 const mtu: usize = 1024; // buffer size for transmission
-const poll_int: u8 = 0; // one-shot program, do not set poll interval
 // ------------------------------------------------------------------------------------
 
 pub fn main() !void {
@@ -62,7 +62,6 @@ pub fn main() !void {
         return errprintln("invalid hostname '{s}'", .{cli.flags.server});
     };
     defer addrlist.deinit();
-    if (addrlist.canon_name) |n| println("Query server: {s}", .{n});
 
     // from where to send the query
     const addr_src = try std.net.Address.resolveIp(cli.flags.src_ip, cli.flags.src_port);
@@ -93,7 +92,7 @@ pub fn main() !void {
         var dst_addr_sock: posix.sockaddr = undefined; // must not use dst.any
         var dst_addr_len: posix.socklen_t = dst.getOsSockLen();
 
-        ntp.Packet.toBytesBuffer(proto_vers, poll_int, &buf);
+        ntp.Packet.toBytesBuffer(proto_vers, &buf);
 
         // packet created!
         const T1: ntp.Time = ntp.Time.fromUnixNanos(@as(u64, @intCast(std.time.nanoTimestamp())));
@@ -107,7 +106,7 @@ pub fn main() !void {
         ) catch |err| switch (err) {
             error.AddressFamilyNotSupported => {
                 if (dst.any.family == posix.AF.INET6) {
-                    println("IPv6 error, try next server.", .{});
+                    errprintln("IPv6 error, try next server.", .{});
                     continue :iter_addrs;
                 }
                 return err;
@@ -123,8 +122,8 @@ pub fn main() !void {
             &dst_addr_len,
         ) catch |err| switch (err) {
             error.WouldBlock => {
-                println("Error: connection timed out", .{});
-                if (i < addrlist.addrs.len - 1) println("Try next server.", .{});
+                errprintln("Error: connection timed out", .{});
+                if (i < addrlist.addrs.len - 1) errprintln("Try next server.", .{});
                 continue :iter_addrs;
             },
             else => |e| return e,
@@ -134,19 +133,19 @@ pub fn main() !void {
         const T4: ntp.Time = ntp.Time.fromUnixNanos(@as(u64, @intCast(std.time.nanoTimestamp())));
 
         if (n_recv != ntp.packet_len) {
-            println("Error: invalid reply length", .{});
-            if (i < addrlist.addrs.len - 1) println("Try next server.", .{});
+            errprintln("Error: invalid reply length", .{});
+            if (i < addrlist.addrs.len - 1) errprintln("Try next server.", .{});
             continue :iter_addrs;
         }
 
         const p_result: ntp.Packet = ntp.Packet.parse(buf[0..ntp.packet_len].*);
         const result: ntp.Result = ntp.Result.fromPacket(p_result, T1, T4);
 
-        println("Server name: {s}", .{cli.flags.server});
-        println("Server address: {any}", .{dst});
-        println("---", .{});
-
-        try pprint(io.getStdOut().writer(), result, &tz);
+        if (cli.flags.json) {
+            try jsonprint(io.getStdOut().writer(), result, cli.flags.server, dst);
+        } else {
+            try pprint(io.getStdOut().writer(), result, &tz, cli.flags.server, dst);
+        }
 
         if (!cli.flags.all) break :iter_addrs;
     }

@@ -7,6 +7,7 @@ const testing = std.testing;
 const assert = std.debug.assert;
 
 const ns_per_s: u64 = 1_000_000_000;
+const u64_max: u64 = 0xFFFFFFFFFFFFFFFF;
 
 /// NTP packet has 48 bytes if extension and key / digest fields are excluded.
 pub const packet_len: usize = 48;
@@ -20,16 +21,27 @@ pub const max_stratum: u8 = 16;
 /// Offset between the Unix epoch and the NTP epoch, era zero, in seconds.
 pub const epoch_offset: u32 = 2_208_988_800;
 
-/// NTP era. Era zero starts at zero hours on 1900-01-01 and ends 2^32 seconds later.
+/// The current NTP era.
+/// Era zero starts at zero hours on 1900-01-01 and ends 2^32 seconds later.
 pub const ntp_era: u8 = 0;
 
 pub const client_mode: u8 = 3;
 
-/// NTP precision
-pub fn precisionToNanos(prc: i8) u64 {
-    if (prc > 0) return ns_per_s << @as(u6, @intCast(prc));
-    if (prc < 0) return ns_per_s >> @as(u6, @intCast(-prc));
+/// NTP precision and poll interval come as period of log2 seconds
+pub fn periodToNanos(p: i8) u64 {
+    if (p > 63) return u64_max;
+    if (p < -63) return 0;
+    if (p > 0) return ns_per_s << @as(u6, @intCast(p));
+    if (p < 0) return ns_per_s >> @as(u6, @intCast(-p));
     return ns_per_s;
+}
+
+pub fn periodToSeconds(p: i8) u64 {
+    if (p > 63) return u64_max;
+    if (p < -63) return 0;
+    if (p > 0) return @as(u64, 1) << @as(u6, @intCast(p));
+    // ignore negative input; cannot represent sub-second period
+    return 0;
 }
 
 /// Time (duration, to be precise) since epoch.
@@ -99,6 +111,15 @@ pub const Time = struct {
         return nsfrac >> 32;
     }
 };
+
+test "period" {
+    const s = periodToSeconds(17);
+    try testing.expectEqual(std.math.powi(u64, 2, 17), s);
+
+    const ns = periodToNanos(5);
+    const want = try std.math.powi(u64, 2, 5);
+    try testing.expectEqual(want * ns_per_s, ns);
+}
 
 test "Time set directly" {
     var t = Time{ .t = 0x0 };
@@ -223,21 +244,21 @@ test "TimeShort" {
     try testing.expectEqual(@as(u64, 65535 * ns_per_s), t.decode());
 }
 
-/// Struct equivalent of the NPT packet definition.
+/// Struct equivalent of the NTP packet definition.
 /// Byte order is considered if a Packet instance is serialized to bytes
 /// or parsed from bytes. Bytes representation is big endian (network).
 pub const Packet = packed struct {
     li_vers_mode: u8, // 2 bits leap second indicator, 3 bits protocol version, 3 bits mode
     stratum: u8 = 0,
-    poll: u8 = 0,
+    poll: i8 = 0,
     precision: i8 = 0x20,
     root_delay: u32 = 0,
     root_dispersion: u32 = 0,
     ref_id: u32 = 0,
-    ts_ref: u64 = 0, // combines seconds and fraction ---v
-    ts_org: u64 = 0, //
-    ts_rec: u64 = 0, //
-    ts_xmt: u64 = 0, // ---^
+    ts_ref: u64 = 0,
+    ts_org: u64 = 0,
+    ts_rec: u64 = 0,
+    ts_xmt: u64 = 0,
     // extension field #1
     // extension field #2
     // key identifier
@@ -246,13 +267,12 @@ pub const Packet = packed struct {
     // Create a client mode NTP packet to query the time from a server.
     // Random bytes are used as client transmit timestamp (xmt),
     // see <https://www.ietf.org/archive/id/draft-ietf-ntp-data-minimization-04.txt>.
-    // For a single query, the poll intervall should be 0.
-    fn _init(version: u8, poll_int: u8) Packet {
+    // For a single query, the poll interval should be 0.
+    fn _init(version: u8) Packet {
         var b: [8]u8 = undefined;
         rand.bytes(&b);
         return .{
             .li_vers_mode = 0 << 6 | version << 3 | client_mode,
-            .poll = poll_int,
             .ts_xmt = @bitCast(b),
         };
     }
@@ -260,9 +280,9 @@ pub const Packet = packed struct {
     /// Create an NTP packet and fill it into a bytes buffer.
     /// 'buf' must be sufficiently large to store ntp.packet_len bytes.
     /// Considers endianess; fields > 1 byte are in big endian byte order.
-    pub fn toBytesBuffer(version: u8, poll_int: u8, buf: []u8) void {
+    pub fn toBytesBuffer(version: u8, buf: []u8) void {
         assert(buf.len >= packet_len);
-        var p: Packet = Packet._init(version, poll_int);
+        var p: Packet = Packet._init(version);
         p.ts_xmt = mem.nativeToBig(u64, p.ts_xmt);
         const ntp_bytes: [packet_len]u8 = @bitCast(p);
         mem.copyForwards(u8, buf, ntp_bytes[0..]);
@@ -270,11 +290,11 @@ pub const Packet = packed struct {
 
     /// Parse bytes of the reply received from the server.
     /// Adjusts for byte order.
+    /// ref_id is NOT byte-swapped if native is little-endian.
     pub fn parse(bytes: [packet_len]u8) Packet {
         var p: Packet = @bitCast(bytes);
         p.root_delay = mem.bigToNative(u32, p.root_delay);
         p.root_dispersion = mem.bigToNative(u32, p.root_dispersion);
-        p.ref_id = mem.bigToNative(u32, p.ref_id);
         p.ts_ref = mem.bigToNative(u64, p.ts_ref);
         p.ts_org = mem.bigToNative(u64, p.ts_org);
         p.ts_rec = mem.bigToNative(u64, p.ts_rec);
@@ -284,7 +304,7 @@ pub const Packet = packed struct {
 };
 
 test "Packet" {
-    const p = Packet._init(3, 0);
+    const p = Packet._init(3);
     try testing.expectEqual(@as(i8, 32), p.precision);
     const b: [packet_len]u8 = @bitCast(p);
     try testing.expectEqual(@as(u8, 27), b[0]);
@@ -296,11 +316,14 @@ pub const Result = struct {
     version: u3 = 0,
     mode: u3 = 0,
     stratum: u8 = 0,
-    poll: u8 = 0,
+    poll: i8 = 0, // log2 seconds
+    poll_period: i32 = 0,
     precision: i8 = 0,
+    precision_ns: u64 = 0,
     root_delay: u64 = 0,
     root_dispersion: u64 = 0,
     ref_id: u32 = 0,
+    __ref_id: [4]u8 = undefined,
 
     // Unix timestamps
     /// time when the server's clock was last updated
@@ -329,8 +352,8 @@ pub const Result = struct {
         result.version = @truncate((p.li_vers_mode >> 3) & 0x7);
         result.mode = @truncate(p.li_vers_mode & 7);
         result.stratum = p.stratum;
-        result.poll = p.poll;
         result.precision = p.precision;
+        result.poll = p.poll;
         result.root_delay = TimeShort.fromRaw(p.root_delay).decode();
         result.root_dispersion = TimeShort.fromRaw(p.root_dispersion).decode();
         result.ref_id = p.ref_id;
@@ -341,6 +364,14 @@ pub const Result = struct {
         result.T3 = Time.fromRaw(p.ts_xmt);
         result.T4 = T4;
 
+        // poll interval comes as log2 seconds and should be 4...17 or 0
+        result.poll_period = switch (p.poll) {
+            0 => 0,
+            1...17 => @intCast(periodToSeconds(p.poll)),
+            else => -1,
+        };
+        result.precision_ns = periodToNanos(result.precision);
+
         // offset = T(B) - T(A) = 1/2 * [(T2-T1) + (T3-T4)]
         result.offset = @divFloor((result.T2.sub(result.T1) + result.T3.sub(result.T4)), 2);
 
@@ -348,6 +379,16 @@ pub const Result = struct {
         result.delay = result.T4.sub(result.T1) - result.T3.sub(result.T2);
 
         // TODO: dispersion
+
+        // from RFC5905: For packet stratum 0 (unspecified or invalid), this
+        // is a four-character ASCII [RFC1345] string, called the "kiss code",
+        // used for debugging and monitoring purposes.  For stratum 1 (reference
+        // clock), this is a four-octet, left-justified, zero-padded ASCII
+        // string assigned to the reference clock.
+        result.__ref_id = std.mem.zeroes([4]u8);
+        if (result.refIDprintable()) {
+            result.__ref_id = @bitCast(result.ref_id);
+        }
 
         return result;
     }
@@ -358,11 +399,13 @@ pub const Result = struct {
         return uncorrected + self.offset;
     }
 
-    /// RefID might be a 4-letter ASCII string.
+    /// ref_id might be a 4-letter ASCII string.
+    /// Only applicable if stratum 0 (kiss code) or stratum 1.
     pub fn refIDprintable(self: Result) bool {
+        if (self.stratum >= 2) return false;
         const data: [4]u8 = @bitCast(self.ref_id);
         for (data) |c| {
-            if (c < ' ' or c > '~') return false;
+            if ((c < ' ' or c > '~') and c != 0) return false;
         }
         return true;
     }
@@ -370,14 +413,15 @@ pub const Result = struct {
     // TODO : add validate() - ref time fresh enough, stratum <= 16 etc.
     // stratum 0 --> Kiss of Death --> check code
     // stratum <= 16 ?
+    // poll interval 4...17 or 0 ?
     // freshness of ts_ref ?
     // sync distance; (result.root_dispersion +| result.root_delay / 2) > max_disp ?
     // server ts_rec must be ts_xmt (cannot send before receive)
-    // leap == 3? unsynchronized leap second!
+    // leap == 3? Unsynchronized leap second!
 
 };
 
-test "Result" {
+test "Result - random" {
     // random bytes can be parsed and analyzed
     var b: [packet_len]u8 = undefined;
     var i: usize = 0;
@@ -386,9 +430,11 @@ test "Result" {
         const r: Result = Result.fromPacket(Packet.parse(b), Time{}, Time{});
         std.mem.doNotOptimizeAway(r);
     }
+}
 
+test "Result - delay, offset" {
     const now: u64 = @intCast(std.time.nanoTimestamp());
-    var p = Packet._init(3, 0);
+    var p = Packet._init(4);
 
     // client |  server  | client
     //   T1   ->T2  ->T3  ->T4
@@ -435,9 +481,33 @@ test "Result" {
     try testing.expectEqual(@as(i64, 3 * ns_per_s), res.delay);
     try testing.expectEqual(-@as(i64, ns_per_s / 2), res.offset);
     try testing.expectEqual(@as(i128, now - 5 * ns_per_s / 10), res.correctTime(@as(i128, now)));
+}
 
-    res.ref_id = 0x44524f50; // DROP
+test "Result - stratum, ref-id" {
+    const now: u64 = @intCast(std.time.nanoTimestamp());
+    var p = Packet._init(4);
+    p.stratum = 1; // ref id is ASCII string 0-terminated
+    p.ref_id = 5460039; // GPS\0
+
+    const T1 = Time.fromUnixNanos(now + 1 * ns_per_s);
+    p.ts_rec = Time.fromUnixNanos(now).t;
+    p.ts_xmt = Time.fromUnixNanos(now).t;
+    const T4 = Time.fromUnixNanos(now + 3 * ns_per_s);
+
+    var res = Result.fromPacket(p, T1, T4);
     try testing.expect(res.refIDprintable());
-    res.ref_id = 0x00000000;
+    try testing.expectEqual([4]u8{ 'G', 'P', 'S', 0x0 }, res.__ref_id);
+
+    p.ref_id = mem.nativeToBig(u32, 0x44524f50); // DROP
+    res = Result.fromPacket(p, T1, T4);
+    try testing.expect(res.refIDprintable());
+
+    p.ref_id = 0x00000000;
+    res = Result.fromPacket(p, T1, T4);
+    try testing.expect(res.refIDprintable());
+
+    p.stratum = 2;
+    res = Result.fromPacket(p, T1, T4);
     try testing.expect(!res.refIDprintable());
+    try testing.expectEqual([4]u8{ 0x0, 0x0, 0x0, 0x0 }, res.__ref_id);
 }

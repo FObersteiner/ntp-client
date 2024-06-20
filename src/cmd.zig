@@ -11,6 +11,7 @@ all: bool = false,
 src_ip: []const u8 = "0.0.0.0",
 src_port: u16 = 0,
 timezone: []const u8 = "UTC",
+json: bool = false,
 
 pub const descriptions = .{
     .server = "NTP server to query (default: pool.ntp.org)",
@@ -20,6 +21,7 @@ pub const descriptions = .{
     .src_ip = "IP address to use for sending the query (default: 0.0.0.0 / auto-select)",
     .src_port = "UDP port to use for sending the query (default: 0 / any port)",
     .timezone = "Timezone to use in results display (default: UTC)",
+    .json = "Print result as JSON",
 };
 
 pub const switches = .{
@@ -28,4 +30,5 @@ pub const switches = .{
     .protocol_version = 'v',
     .all = 'a',
     .timezone = 'z',
+    .json = 'j',
 };

@@ -86,7 +86,7 @@ NTP v4 data format, <https://datatracker.ietf.org/doc/html/rfc5905>
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-### Kiss Codes
+### Kiss Codes (stratum = 0, monitoring, debugging)
 
 ```text
     +------+------------------------------------------------------------+

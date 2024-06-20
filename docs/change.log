@@ -1,5 +1,10 @@
 # Changelog
 
+## 2024-06-20, v0.0.12
+
+- add parser for ref ID (stratum 0 or 1)
+- build/zon: expose ntp.zig as a library
+
 ## 2024-06-16, v0.0.11
 
 - keep client timestamps local to client

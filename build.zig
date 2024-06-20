@@ -1,10 +1,15 @@
 const std = @import("std");
 const log = std.log.scoped(.ntp_client_build);
-const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 11 };
+const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 12 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    // expose ntp.zig as a library
+    _ = b.addModule("ntp_client", .{
+        .root_source_file = b.path("src/ntp.zig"),
+    });
 
     const flags = b.dependency("flags", .{});
     const flags_module = flags.module("flags");
