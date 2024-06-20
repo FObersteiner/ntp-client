@@ -18,7 +18,35 @@ Options:
   --src-ip               IP address to use for sending the query (default: 0.0.0.0 / auto-select)
   --src-port             UDP port to use for sending the query (default: 0 / any port)
   -z, --timezone         Timezone to use in results display (default: UTC)
+  -j, --json             Print result as JSON
   -h, --help             Show this help and exit
+```
+
+## Demo output
+
+```shell
+zig build run -- -z Europe/Berlin
+```
+
+```text
+---***---
+Server name: "pool.ntp.org"
+Server address: "144.91.116.85:123"
+---
+LI=0 VN=4 Mode=4 Stratum=2 Poll=0 (0 s) Precision=-25 (29 ns)
+ref_id: 2284619087
+root_delay: 3555 us, root_dispersion: 61 us
+---
+Server last synced  : 2024-06-20T17:27:37.417288141+02:00
+T1, packet created  : 2024-06-20T17:27:43.078412820+02:00
+T2, server received : 2024-06-20T17:27:43.114188101+02:00
+T3, server replied  : 2024-06-20T17:27:43.116242943+02:00
+T4, reply received  : 2024-06-20T17:27:43.157438264+02:00
+(timezone displayed: Europe/Berlin)
+---
+Offset to timserver: -0.003 s (-2711 us)
+Round-trip delay:    0.077 s (76970 us)
+---***---
 ```
 
 ## Compatibility and Requirements
