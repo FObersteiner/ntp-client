@@ -1,5 +1,9 @@
 # Changelog
 
+## 2024-06-24, v0.0.13
+
+- use parseIp instead of resolveIp, avoids "std.net.if_nametoindex unimplemented for this OS" error on specific OS (thanks @part1zano on codeberg)
+
 ## 2024-06-20, v0.0.12
 
 - add parser for ref ID (stratum 0 or 1)

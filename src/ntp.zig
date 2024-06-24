@@ -23,7 +23,8 @@ pub const epoch_offset: u32 = 2_208_988_800;
 
 /// The current NTP era.
 /// Era zero starts at zero hours on 1900-01-01 and ends 2^32 seconds later.
-pub const ntp_era: u8 = 0;
+// TODO : handle era != 0 (see also: Unix time input/output)
+pub const ntp_era: i8 = 0;
 
 pub const client_mode: u8 = 3;
 
@@ -38,10 +39,9 @@ pub fn periodToNanos(p: i8) u64 {
 
 pub fn periodToSeconds(p: i8) u64 {
     if (p > 63) return u64_max;
-    if (p < -63) return 0;
     if (p > 0) return @as(u64, 1) << @as(u6, @intCast(p));
-    // ignore negative input; cannot represent sub-second period
-    return 0;
+    // ignore negative input (ceil period); cannot represent sub-second period
+    return 1;
 }
 
 /// Time (duration, to be precise) since epoch.
@@ -113,8 +113,12 @@ pub const Time = struct {
 };
 
 test "period" {
-    const s = periodToSeconds(17);
+    var s = periodToSeconds(17);
     try testing.expectEqual(std.math.powi(u64, 2, 17), s);
+    s = periodToSeconds(0);
+    try testing.expectEqual(1, s);
+    s = periodToSeconds(-1);
+    try testing.expectEqual(1, s);
 
     const ns = periodToNanos(5);
     const want = try std.math.powi(u64, 2, 5);
@@ -198,7 +202,7 @@ test "Time Unix" {
     ts = @as(u64, @intCast(std.time.nanoTimestamp()));
     try testing.expectEqual(@as(i128, @intCast(ts)), Time.fromUnixNanos(ts).toUnixNanos());
 
-    // TODO : negative input
+    // TODO : test negative input
 }
 
 /// Duration with lower resolution and smaller range
@@ -290,7 +294,7 @@ pub const Packet = packed struct {
 
     /// Parse bytes of the reply received from the server.
     /// Adjusts for byte order.
-    /// ref_id is NOT byte-swapped if native is little-endian.
+    /// ref_id is NOT byte-swapped even if native is little-endian.
     pub fn parse(bytes: [packet_len]u8) Packet {
         var p: Packet = @bitCast(bytes);
         p.root_delay = mem.bigToNative(u32, p.root_delay);

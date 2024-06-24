@@ -63,8 +63,10 @@ pub fn main() !void {
     };
     defer addrlist.deinit();
 
-    // from where to send the query
-    const addr_src = try std.net.Address.resolveIp(cli.flags.src_ip, cli.flags.src_port);
+    // from where to send the query.
+    // Zig std docs: to handle IPv6 link-local unix addresses,
+    //               it is recommended to use `resolveIp` instead.
+    const addr_src = try std.net.Address.parseIp(cli.flags.src_ip, cli.flags.src_port);
 
     const sock = try posix.socket(
         addr_src.any.family,

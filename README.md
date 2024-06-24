@@ -51,7 +51,7 @@ Round-trip delay:    0.077 s (76970 us)
 
 ## Compatibility and Requirements
 
-Developed & tested on Linux. Windows should work (build.zig links libc for this), Mac OS might work (can't test this)
+Developed & tested on Linux (Debian, on an x86 machine). Windows should work (build.zig links libc for this), Mac OS might work (can't test this).
 
 ## Zig version
 
