@@ -1,5 +1,9 @@
 # Changelog
 
+## 2024-06-26, v0.0.14
+
+- use lazy dependencies so that another project can use ntp.zig without having to fetch the dependencies of this project
+
 ## 2024-06-24, v0.0.13
 
 - use parseIp instead of resolveIp, avoids "std.net.if_nametoindex unimplemented for this OS" error on specific OS (thanks @part1zano on codeberg)

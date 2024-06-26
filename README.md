@@ -7,7 +7,23 @@ Command line app to query an NTP server, to verify your OS clock setting.
 - [on Codeberg](https://codeberg.org/FObersteiner/ntp_client)
 - [on github](https://github.com/FObersteiner/ntp-client)
 
-```text
+## Usage
+
+### Building the binary
+
+```sh
+zig build -Dexe [--release=[safe|small|fast]]
+# build and run, debug: zig build -Dexe run
+# library tests: zig build test
+```
+
+### NTP library
+
+NTP library (`src/ntp.zig`) can be used independently in other projects; it is exposed via this project's `build.zig` and `build.zig.zon` files. Other dependencies of the binary are lazy, i.e. they won't be fetched if you use only the library in another project.
+
+### Usage of the binary
+
+```sh
 Usage: ntp_client [options]
 
 Options:
@@ -24,7 +40,7 @@ Options:
 
 ## Demo output
 
-```shell
+```sh
 zig build run -- -z Europe/Berlin
 ```
 
@@ -51,7 +67,7 @@ Round-trip delay:    0.077 s (76970 us)
 
 ## Compatibility and Requirements
 
-Developed & tested on Linux (Debian, on an x86 machine). Windows should work (build.zig links libc for this), Mac OS might work (can't test this).
+Developed & tested on Linux (Debian, on an x86 machine). Windows worked last time I tested (build.zig links libc for this), Mac OS might work (can't test this).
 
 ## Zig version
 
