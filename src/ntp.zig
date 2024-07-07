@@ -7,6 +7,7 @@ const testing = std.testing;
 const assert = std.debug.assert;
 
 const ns_per_s: u64 = 1_000_000_000;
+const s_per_ntp_era: u64 = 1 << 32;
 const u64_max: u64 = 0xFFFFFFFFFFFFFFFF;
 
 /// NTP packet has 48 bytes if extension and key / digest fields are excluded.
@@ -21,9 +22,7 @@ pub const max_stratum: u8 = 16;
 /// Offset between the Unix epoch and the NTP epoch, era zero, in seconds.
 pub const epoch_offset: u32 = 2_208_988_800;
 
-/// The current NTP era.
-/// Era zero starts at zero hours on 1900-01-01 and ends 2^32 seconds later.
-// TODO : handle era != 0 (see also: Unix time input/output)
+/// The current NTP era, [1900-01-01T00:00..2036-02-07T06:28:15]
 pub const ntp_era: i8 = 0;
 
 pub const client_mode: u8 = 3;
@@ -54,13 +53,14 @@ pub fn periodToSeconds(p: i8) u64 {
 ///
 pub const Time = struct {
     t: u64 = 0, // upper 32 bits: seconds, lower 32 bits: fraction
+    era: i8 = ntp_era, // this is only used for Unix time input / output
 
     /// from value as received in NTP packet.
     pub fn fromRaw(raw: u64) Time {
         return .{ .t = raw };
     }
 
-    /// from nanoseconds
+    /// from nanoseconds since epoch in current era
     pub fn encode(nanos: u64) Time {
         const sec: u64 = @truncate(@divFloor(nanos, ns_per_s));
         const nsec: u64 = @intCast(@rem(nanos, ns_per_s));
@@ -68,7 +68,7 @@ pub const Time = struct {
         return .{ .t = @as(u64, @intCast(sec << 32)) + frac };
     }
 
-    /// to nanoseconds
+    /// to nanoseconds since epoch in current era
     pub fn decode(self: Time) u64 {
         const sec: u64 = (self.t >> 32);
         const nsec = frac_to_nsec(self.t & 0xFFFFFFFF);
@@ -91,13 +91,19 @@ pub const Time = struct {
     /// nanoseconds since the Unix epoch to NTP time since
     /// the NTP epoch / era 0.
     /// Cannot handle time before 1970-01-01 / negative Unix time.
-    pub fn fromUnixNanos(nanos: u64) Time {
-        return Time.encode(nanos + (@as(u64, epoch_offset) * @as(u64, ns_per_s)));
+    pub fn fromUnixNanos(nanos: i128) Time {
+        var result: Time = .{ .era = @intCast(@divFloor(@divFloor(nanos, ns_per_s) + epoch_offset, s_per_ntp_era)) };
+        var ntp_nanos: i128 = @as(i128, nanos) + ns_per_s * epoch_offset;
+        ntp_nanos -= result.era * @as(i128, ns_per_s * s_per_ntp_era);
+        result.t = Time.encode(@intCast(ntp_nanos)).t;
+        return result;
     }
 
     /// NTP time since epoch / era 0 to nanoseconds since the Unix epoch
     pub fn toUnixNanos(self: Time) i128 {
-        return @as(i128, @intCast(self.decode())) - (@as(u64, epoch_offset) * @as(u64, ns_per_s));
+        const era_offset: i128 = self.era * @as(i128, s_per_ntp_era * ns_per_s);
+        const epoch_offset_ns: i128 = @as(i128, epoch_offset) * @as(i128, ns_per_s);
+        return @as(i128, @intCast(self.decode())) - epoch_offset_ns + era_offset;
     }
 
     // fraction to nanoseconds;
@@ -111,99 +117,6 @@ pub const Time = struct {
         return nsfrac >> 32;
     }
 };
-
-test "period" {
-    var s = periodToSeconds(17);
-    try testing.expectEqual(std.math.powi(u64, 2, 17), s);
-    s = periodToSeconds(0);
-    try testing.expectEqual(1, s);
-    s = periodToSeconds(-1);
-    try testing.expectEqual(1, s);
-
-    const ns = periodToNanos(5);
-    const want = try std.math.powi(u64, 2, 5);
-    try testing.expectEqual(want * ns_per_s, ns);
-}
-
-test "Time set directly" {
-    var t = Time{ .t = 0x0 };
-    try testing.expectEqual(@as(u64, 0), t.decode());
-
-    t = Time{ .t = 0x0000000080000000 };
-    try testing.expectEqual(@as(u64, 500_000_000), t.decode());
-
-    t = Time{ .t = 0x00000000FFFFFFFB };
-    try testing.expectEqual(@as(u64, 999_999_999), t.decode());
-
-    t.t += t.t;
-    try testing.expectEqual(@as(u64, 1_999_999_998), t.decode());
-
-    t = Time{ .t = 0x0000000180000000 };
-    try testing.expectEqual(@as(u64, 1_500_000_000), t.decode());
-
-    // 2036-02-07T06:28:16+00:00, last second of NTP era 0
-    t = Time{ .t = 0xFFFFFFFFFFFFFFFB };
-    try testing.expectEqual(@as(u64, 4294967295999999999), t.decode());
-
-    // overflow:
-    // t.t += (1 << 32);
-}
-
-test "Time arithmetic" {
-    try testing.expectEqual(
-        @as(i64, 0),
-        Time.encode(ns_per_s + 1).sub(Time.encode(ns_per_s + 1)),
-    );
-    try testing.expectEqual(
-        @as(i64, ns_per_s),
-        Time.encode(ns_per_s * 2).sub(Time.encode(ns_per_s)),
-    );
-    try testing.expectEqual(
-        -@as(i64, ns_per_s),
-        Time.encode(ns_per_s).sub(Time.encode(ns_per_s * 2)),
-    );
-    try testing.expectEqual(
-        @as(i64, -1),
-        Time.encode(ns_per_s - 1).sub(Time.encode(ns_per_s)),
-    );
-    try testing.expectEqual(
-        @as(i64, 1),
-        Time.encode(ns_per_s).sub(Time.encode(ns_per_s - 1)),
-    );
-
-    // across era bounds
-    var a = Time{ .t = 0xFFFFFFFF << 32 }; // last second of era n
-    var b = Time{ .t = 1 << 32 }; // first second of era n+1
-    try testing.expectEqual(@as(i64, -2_000_000_000), a.sub(b));
-    try testing.expectEqual(@as(i64, 2_000_000_000), b.sub(a));
-
-    // 2024-06-07, 2044-06-07
-    a, b = .{ Time.encode(3926707200000000000), Time.encode(4557859200000000000) };
-    try testing.expectEqual(@as(i64, -631152000000000000), a.sub(b));
-    try testing.expectEqual(@as(i64, 631152000000000000), b.sub(a));
-}
-
-test "Time encode decode" {
-    try testing.expectEqual(@as(u64, ns_per_s), Time.encode(ns_per_s).decode());
-
-    try testing.expectEqual(
-        @as(u64, ns_per_s * 2 + 10),
-        Time.encode(ns_per_s * 2 + 10).decode(),
-    );
-
-    const ts: u64 = @as(u64, @intCast(std.time.nanoTimestamp()));
-    try testing.expectEqual(ts, Time.encode(ts).decode());
-}
-
-test "Time Unix" {
-    var ts: u64 = 0;
-    try testing.expectEqual(epoch_offset, Time.fromUnixNanos(ts).decode() / ns_per_s);
-
-    ts = @as(u64, @intCast(std.time.nanoTimestamp()));
-    try testing.expectEqual(@as(i128, @intCast(ts)), Time.fromUnixNanos(ts).toUnixNanos());
-
-    // TODO : test negative input
-}
 
 /// Duration with lower resolution and smaller range
 pub const TimeShort = struct {
@@ -231,23 +144,6 @@ pub const TimeShort = struct {
     }
 };
 
-test "TimeShort" {
-    var t = TimeShort{ .t = 0x00000000 };
-    try testing.expectEqual(@as(u64, 0), t.decode());
-
-    t = TimeShort{ .t = 0x00000001 };
-    try testing.expectEqual(@as(u64, 15259), t.decode());
-
-    t = TimeShort{ .t = 0x00008000 };
-    try testing.expectEqual(@as(u64, 500_000_000), t.decode());
-
-    t = TimeShort{ .t = 0x00018000 };
-    try testing.expectEqual(@as(u64, 1_500_000_000), t.decode());
-
-    t = TimeShort{ .t = 0xffff0000 };
-    try testing.expectEqual(@as(u64, 65535 * ns_per_s), t.decode());
-}
-
 /// Struct equivalent of the NTP packet definition.
 /// Byte order is considered if a Packet instance is serialized to bytes
 /// or parsed from bytes. Bytes representation is big endian (network).
@@ -268,11 +164,11 @@ pub const Packet = packed struct {
     // key identifier
     // digest
 
-    // Create a client mode NTP packet to query the time from a server.
-    // Random bytes are used as client transmit timestamp (xmt),
-    // see <https://www.ietf.org/archive/id/draft-ietf-ntp-data-minimization-04.txt>.
-    // For a single query, the poll interval should be 0.
-    fn _init(version: u8) Packet {
+    /// Create a client mode NTP packet to query the time from a server.
+    /// Random bytes are used as client transmit timestamp (xmt),
+    /// see <https://www.ietf.org/archive/id/draft-ietf-ntp-data-minimization-04.txt>.
+    /// For a single query, the poll interval should be 0.
+    pub fn init(version: u8) Packet {
         var b: [8]u8 = undefined;
         rand.bytes(&b);
         return .{
@@ -284,9 +180,9 @@ pub const Packet = packed struct {
     /// Create an NTP packet and fill it into a bytes buffer.
     /// 'buf' must be sufficiently large to store ntp.packet_len bytes.
     /// Considers endianess; fields > 1 byte are in big endian byte order.
-    pub fn toBytesBuffer(version: u8, buf: []u8) void {
+    pub fn initToBuffer(version: u8, buf: []u8) void {
         assert(buf.len >= packet_len);
-        var p: Packet = Packet._init(version);
+        var p: Packet = Packet.init(version);
         p.ts_xmt = mem.nativeToBig(u64, p.ts_xmt);
         const ntp_bytes: [packet_len]u8 = @bitCast(p);
         mem.copyForwards(u8, buf, ntp_bytes[0..]);
@@ -306,13 +202,6 @@ pub const Packet = packed struct {
         return p;
     }
 };
-
-test "Packet" {
-    const p = Packet._init(3);
-    try testing.expectEqual(@as(i8, 32), p.precision);
-    const b: [packet_len]u8 = @bitCast(p);
-    try testing.expectEqual(@as(u8, 27), b[0]);
-}
 
 /// Analyze an NTP packet received from a server.
 pub const Result = struct {
@@ -424,94 +313,3 @@ pub const Result = struct {
     // leap == 3? Unsynchronized leap second!
 
 };
-
-test "Result - random" {
-    // random bytes can be parsed and analyzed
-    var b: [packet_len]u8 = undefined;
-    var i: usize = 0;
-    while (i < 1_000_000) : (i += 1) {
-        rand.bytes(&b);
-        const r: Result = Result.fromPacket(Packet.parse(b), Time{}, Time{});
-        std.mem.doNotOptimizeAway(r);
-    }
-}
-
-test "Result - delay, offset" {
-    const now: u64 = @intCast(std.time.nanoTimestamp());
-    var p = Packet._init(4);
-
-    // client |  server  | client
-    //   T1   ->T2  ->T3  ->T4
-    //   1      0     0     3
-    // => offset -2, roundtrip 2
-    var T1 = Time.fromUnixNanos(now + 1 * ns_per_s);
-    p.ts_rec = Time.fromUnixNanos(now).t;
-    p.ts_xmt = Time.fromUnixNanos(now).t;
-    var T4 = Time.fromUnixNanos(now + 3 * ns_per_s);
-    var res = Result.fromPacket(p, T1, T4);
-    try testing.expectEqual(@as(i64, 2 * ns_per_s), res.delay);
-    try testing.expectEqual(-@as(i64, 2 * ns_per_s), res.offset);
-    try testing.expectEqual(@as(i128, now - 2 * ns_per_s), res.correctTime(@as(i128, now)));
-
-    //   0      2     2     1
-    // => offset 1.5, roundtrip 1
-    T1 = Time.fromUnixNanos(now);
-    p.ts_rec = Time.fromUnixNanos(now + 2 * ns_per_s).t;
-    p.ts_xmt = Time.fromUnixNanos(now + 2 * ns_per_s).t;
-    T4 = Time.fromUnixNanos(now + 1 * ns_per_s);
-    res = Result.fromPacket(p, T1, T4);
-    try testing.expectEqual(@as(i64, 1 * ns_per_s), res.delay);
-    try testing.expectEqual(@as(i64, 15 * ns_per_s / 10), res.offset);
-    try testing.expectEqual(@as(i128, now + 15 * ns_per_s / 10), res.correctTime(@as(i128, now)));
-
-    //   0      20     21   5
-    // => offset 18, roundtrip 4
-    T1 = Time.fromUnixNanos(now);
-    p.ts_rec = Time.fromUnixNanos(now + 20 * ns_per_s).t;
-    p.ts_xmt = Time.fromUnixNanos(now + 21 * ns_per_s).t;
-    T4 = Time.fromUnixNanos(now + 5 * ns_per_s);
-    res = Result.fromPacket(p, T1, T4);
-    try testing.expectEqual(@as(i64, 4 * ns_per_s), res.delay);
-    try testing.expectEqual(@as(i64, 18 * ns_per_s), res.offset);
-    try testing.expectEqual(@as(i128, now + 18 * ns_per_s), res.correctTime(@as(i128, now)));
-
-    //   101    102    103    105
-    // => offset -0.5, roundtrip 3
-    T1 = Time.fromUnixNanos(now + 101 * ns_per_s);
-    p.ts_rec = Time.fromUnixNanos(now + 102 * ns_per_s).t;
-    p.ts_xmt = Time.fromUnixNanos(now + 103 * ns_per_s).t;
-    T4 = Time.fromUnixNanos(now + 105 * ns_per_s);
-    res = Result.fromPacket(p, T1, T4);
-    try testing.expectEqual(@as(i64, 3 * ns_per_s), res.delay);
-    try testing.expectEqual(-@as(i64, ns_per_s / 2), res.offset);
-    try testing.expectEqual(@as(i128, now - 5 * ns_per_s / 10), res.correctTime(@as(i128, now)));
-}
-
-test "Result - stratum, ref-id" {
-    const now: u64 = @intCast(std.time.nanoTimestamp());
-    var p = Packet._init(4);
-    p.stratum = 1; // ref id is ASCII string 0-terminated
-    p.ref_id = 5460039; // GPS\0
-
-    const T1 = Time.fromUnixNanos(now + 1 * ns_per_s);
-    p.ts_rec = Time.fromUnixNanos(now).t;
-    p.ts_xmt = Time.fromUnixNanos(now).t;
-    const T4 = Time.fromUnixNanos(now + 3 * ns_per_s);
-
-    var res = Result.fromPacket(p, T1, T4);
-    try testing.expect(res.refIDprintable());
-    try testing.expectEqual([4]u8{ 'G', 'P', 'S', 0x0 }, res.__ref_id);
-
-    p.ref_id = mem.nativeToBig(u32, 0x44524f50); // DROP
-    res = Result.fromPacket(p, T1, T4);
-    try testing.expect(res.refIDprintable());
-
-    p.ref_id = 0x00000000;
-    res = Result.fromPacket(p, T1, T4);
-    try testing.expect(res.refIDprintable());
-
-    p.stratum = 2;
-    res = Result.fromPacket(p, T1, T4);
-    try testing.expect(!res.refIDprintable());
-    try testing.expectEqual([4]u8{ 0x0, 0x0, 0x0, 0x0 }, res.__ref_id);
-}

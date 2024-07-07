@@ -1,5 +1,10 @@
 # Changelog
 
+## 2024-07-05, v0.0.15
+
+- handle NTP era for Unix time input / output
+- ntp.Packet: make init method public, buffer initialiizer method is now called initToBuffer
+
 ## 2024-06-26, v0.0.14
 
 - use lazy dependencies so that another project can use ntp.zig without having to fetch the dependencies of this project

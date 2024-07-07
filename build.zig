@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.ntp_client_build);
-const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 14 };
+const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 15 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     const build_exe = b.option(bool, "exe", "build executable");
 
     // expose ntp.zig as a library
-    _ = b.addModule("ntp_client", .{
+    const ntplib_module = b.addModule("ntp_client", .{
         .root_source_file = b.path("src/ntp.zig"),
     });
 
@@ -56,25 +56,14 @@ pub fn build(b: *std.Build) void {
         run_step.dependOn(&run_cmd.step);
     }
 
-    // run unit tests from ntp.zig, which on its own has no dependencies
+    // run unit tests for ntplib, as a client of the library
+    const test_step = b.step("test", "Run ntplib unit tests");
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("src/test_ntplib.zig"),
         .target = target,
         .optimize = optimize,
     });
+    unit_tests.root_module.addImport("ntplib", ntplib_module);
     const run_unit_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
-
-    // autodocs step excluded since not really useful as NTP lib is currently
-    // pretty small.
-    // const docs_step = b.step("docs", "auto-generate documentation");
-    // {
-    //     const install_docs = b.addInstallDirectory(.{
-    //         .source_dir = exe.getEmittedDocs(),
-    //         .install_dir = std.Build.InstallDir{ .custom = "../autodoc" },
-    //         .install_subdir = "",
-    //     });
-    //     docs_step.dependOn(&install_docs.step);
-    // }
 }

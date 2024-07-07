@@ -41,27 +41,27 @@ Options:
 ## Demo output
 
 ```sh
-zig build run -- -z Europe/Berlin
+zig build run -Dexe -- -z local
 ```
 
 ```text
 ---***---
 Server name: "pool.ntp.org"
-Server address: "144.91.116.85:123"
+Server address: "185.252.140.126:123"
 ---
 LI=0 VN=4 Mode=4 Stratum=2 Poll=0 (0 s) Precision=-25 (29 ns)
-ref_id: 2284619087
-root_delay: 3555 us, root_dispersion: 61 us
+ref_id: 2355160
+root_delay: 16021 us, root_dispersion: 1022 us
 ---
-Server last synced  : 2024-06-20T17:27:37.417288141+02:00
-T1, packet created  : 2024-06-20T17:27:43.078412820+02:00
-T2, server received : 2024-06-20T17:27:43.114188101+02:00
-T3, server replied  : 2024-06-20T17:27:43.116242943+02:00
-T4, reply received  : 2024-06-20T17:27:43.157438264+02:00
+Server last synced  : 2024-07-03T16:01:24.652337151+02:00
+T1, packet created  : 2024-07-03T16:15:57.183283642+02:00
+T2, server received : 2024-07-03T16:15:57.201324404+02:00
+T3, server replied  : 2024-07-03T16:15:57.201334367+02:00
+T4, reply received  : 2024-07-03T16:15:57.208543450+02:00
 (timezone displayed: Europe/Berlin)
 ---
-Offset to timserver: -0.003 s (-2711 us)
-Round-trip delay:    0.077 s (76970 us)
+Offset to timserver: 0.005 s (5415 us)
+Round-trip delay:    0.025 s (25249 us)
 ---***---
 ```
 
@@ -71,7 +71,7 @@ Developed & tested on Linux (Debian, on an x86 machine). Windows worked last tim
 
 ## Zig version
 
-This package is developed with Zig `0.14.0-dev`, might not compile with older versions. As of 2024-06-15, Zig-0.12 and Zig-0.13 (both stable) should work.
+This package is developed with Zig `0.14.0-dev` (master), might not compile with older versions. As of 2024-06-15, Zig-0.12 and Zig-0.13 (both stable) should work.
 
 ## Dependencies
 

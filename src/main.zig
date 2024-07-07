@@ -15,9 +15,6 @@ const Cmd = @import("cmd.zig");
 const ntp = @import("ntp.zig");
 const pprint = @import("prettyprint.zig").pprint_result;
 const jsonprint = @import("prettyprint.zig").jsonprint_result;
-test {
-    _ = ntp;
-}
 
 // ------------------------------------------------------------------------------------
 const timeout_sec: isize = 5; // wait-for-reply timeout
@@ -94,7 +91,7 @@ pub fn main() !void {
         var dst_addr_sock: posix.sockaddr = undefined; // must not use dst.any
         var dst_addr_len: posix.socklen_t = dst.getOsSockLen();
 
-        ntp.Packet.toBytesBuffer(proto_vers, &buf);
+        ntp.Packet.initToBuffer(proto_vers, &buf);
 
         // packet created!
         const T1: ntp.Time = ntp.Time.fromUnixNanos(@as(u64, @intCast(std.time.nanoTimestamp())));
