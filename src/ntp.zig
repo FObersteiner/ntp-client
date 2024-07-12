@@ -10,22 +10,36 @@ const ns_per_s: u64 = 1_000_000_000;
 const s_per_ntp_era: u64 = 1 << 32;
 const u64_max: u64 = 0xFFFFFFFFFFFFFFFF;
 
-/// NTP packet has 48 bytes if extension and key / digest fields are excluded.
+/// NTP packet has 48 bytes if extension and key / digest fields are excluded
 pub const packet_len: usize = 48;
 
-/// Clock error estimate; only applicable if client makes repeated calls to a server.
-pub const max_disp: f32 = 16.0; // [s]
+// min/max constants see <https://datatracker.ietf.org/doc/html/rfc5905#section-7.2>
 
-/// Too far away.
 pub const max_stratum: u8 = 16;
 
-/// Offset between the Unix epoch and the NTP epoch, era zero, in seconds.
+// TODO : where is this applicable ?
+pub const max_dispersion: u64 = 16; // [s]
+
+/// [s]; ref. root distance (dispersion + delay/2)
+pub const max_dist: u64 = 1;
+
+/// [s]; server must have synced in last x seconds
+pub const max_refclock_age: i64 = 1024;
+
+/// 36 h
+pub const max_poll: i8 = 17;
+
+/// 16 s - ignored in result check
+pub const min_poll: i8 = 4;
+
+/// Offset between the Unix epoch and the NTP epoch, era zero, in seconds
 pub const epoch_offset: u32 = 2_208_988_800;
 
-/// The current NTP era, [1900-01-01T00:00..2036-02-07T06:28:15]
+/// The current NTP era, 0 = [1900-01-01T00:00:00Z..2036-02-07T06:28:15Z]
 pub const ntp_era: i8 = 0;
 
 pub const client_mode: u8 = 3;
+pub const server_mode: u8 = 4;
 
 /// NTP precision and poll interval come as period of log2 seconds
 pub fn periodToNanos(p: i8) u64 {
@@ -79,9 +93,9 @@ pub const Time = struct {
 
     /// NTP time subtraction which works across era bounds;
     /// works as long as the absolute difference between A and B is < 2^(n-1) (~68 years for n=32).
-    pub fn sub(self: Time, other: Time) i64 {
-        const a_sec: u32 = @truncate(self.t >> 32);
-        const a_nsec = frac_to_nsec(self.t & 0xFFFFFFFF);
+    pub fn sub(this: Time, other: Time) i64 {
+        const a_sec: u32 = @truncate(this.t >> 32);
+        const a_nsec = frac_to_nsec(this.t & 0xFFFFFFFF);
         const b_sec: u32 = @truncate(other.t >> 32);
         const b_nsec = frac_to_nsec(other.t & 0xFFFFFFFF);
         const offset: i32 = @bitCast(a_sec +% (~b_sec +% 1));
@@ -100,10 +114,10 @@ pub const Time = struct {
     }
 
     /// NTP time since epoch / era 0 to nanoseconds since the Unix epoch
-    pub fn toUnixNanos(self: Time) i128 {
-        const era_offset: i128 = self.era * @as(i128, s_per_ntp_era * ns_per_s);
+    pub fn toUnixNanos(time: Time) i128 {
+        const era_offset: i128 = time.era * @as(i128, s_per_ntp_era * ns_per_s);
         const epoch_offset_ns: i128 = @as(i128, epoch_offset) * @as(i128, ns_per_s);
-        return @as(i128, @intCast(self.decode())) - epoch_offset_ns + era_offset;
+        return @as(i128, @intCast(time.decode())) - epoch_offset_ns + era_offset;
     }
 
     // fraction to nanoseconds;
@@ -136,9 +150,9 @@ pub const TimeShort = struct {
     }
 
     /// to nanoseconds
-    pub fn decode(self: TimeShort) u64 {
-        const nanos: u64 = @as(u64, self.t >> 16) * ns_per_s;
-        const frac: u64 = @as(u64, self.t & 0xFFFF) * ns_per_s;
+    pub fn decode(ts: TimeShort) u64 {
+        const nanos: u64 = @as(u64, ts.t >> 16) * ns_per_s;
+        const frac: u64 = @as(u64, ts.t & 0xFFFF) * ns_per_s;
         const nsec = if (@as(u16, @truncate(frac)) > 0x8000) (frac >> 16) + 1 else frac >> 16;
         return nanos + nsec;
     }
@@ -211,9 +225,10 @@ pub const Result = struct {
     stratum: u8 = 0,
     poll: i8 = 0, // log2 seconds
     poll_period: i32 = 0,
-    precision: i8 = 0,
+    precision: i8 = 0, // log2 seconds
     precision_ns: u64 = 0,
     root_delay: u64 = 0,
+    root_delay_client: u64 = 0,
     root_dispersion: u64 = 0,
     ref_id: u32 = 0,
     __ref_id: [4]u8 = undefined,
@@ -230,11 +245,11 @@ pub const Result = struct {
     /// T4, when the packet was received and processed
     T4: Time = .{},
 
-    /// offset of the local machine vs. the server
+    /// offset in ns of the local machine vs. the server
     offset: i64 = 0,
-    /// round-trip delay (network)
+    /// round-trip delay in ns (network)
     delay: i64 = 0,
-    /// dispersion / clock error estimate
+    /// dispersion / clock error estimate in ns
     disp: u64 = 0,
 
     /// results from a server reply packet.
@@ -247,9 +262,9 @@ pub const Result = struct {
         result.stratum = p.stratum;
         result.precision = p.precision;
         result.poll = p.poll;
-        result.root_delay = TimeShort.fromRaw(p.root_delay).decode();
-        result.root_dispersion = TimeShort.fromRaw(p.root_dispersion).decode();
         result.ref_id = p.ref_id;
+        result.root_dispersion = TimeShort.fromRaw(p.root_dispersion).decode();
+        result.root_delay = TimeShort.fromRaw(p.root_delay).decode();
 
         result.Tref = Time.fromRaw(p.ts_ref);
         result.T1 = T1;
@@ -259,7 +274,7 @@ pub const Result = struct {
 
         // poll interval comes as log2 seconds and should be 4...17 or 0
         result.poll_period = switch (p.poll) {
-            0 => 0,
+            0 => 0, // unspecified
             1...17 => @intCast(periodToSeconds(p.poll)),
             else => -1,
         };
@@ -271,7 +286,10 @@ pub const Result = struct {
         // roundtrip delay = T(ABA) = (T4-T1) - (T3-T2)
         result.delay = result.T4.sub(result.T1) - result.T3.sub(result.T2);
 
-        // TODO: dispersion
+        // Client delay to the root, as sum of delay to timeserver and timeserver root delay.
+        // Client delay might be negative in edge case of very close proximity to server.
+        const delay_normalized: u64 = if (result.delay < 0) 0 else @intCast(result.delay);
+        result.root_delay_client = result.root_delay + delay_normalized;
 
         // from RFC5905: For packet stratum 0 (unspecified or invalid), this
         // is a four-character ASCII [RFC1345] string, called the "kiss code",
@@ -288,28 +306,120 @@ pub const Result = struct {
 
     /// current time in nanoseconds since the Unix epoch corrected by offset reported
     /// by NTP server.
-    pub fn correctTime(self: Result, uncorrected: i128) i128 {
-        return uncorrected + self.offset;
+    pub fn correctTime(result: Result, uncorrected: i128) i128 {
+        return uncorrected + result.offset;
     }
 
+    // TODO : stratum 0 --> Kiss of Death --> check code
     /// ref_id might be a 4-letter ASCII string.
     /// Only applicable if stratum 0 (kiss code) or stratum 1.
-    pub fn refIDprintable(self: Result) bool {
-        if (self.stratum >= 2) return false;
-        const data: [4]u8 = @bitCast(self.ref_id);
+    pub fn refIDprintable(result: Result) bool {
+        if (result.stratum >= 2) return false;
+        const data: [4]u8 = @bitCast(result.ref_id);
         for (data) |c| {
             if ((c < ' ' or c > '~') and c != 0) return false;
         }
         return true;
     }
 
-    // TODO : add validate() - ref time fresh enough, stratum <= 16 etc.
-    // stratum 0 --> Kiss of Death --> check code
-    // stratum <= 16 ?
-    // poll interval 4...17 or 0 ?
-    // freshness of ts_ref ?
-    // sync distance; (result.root_dispersion +| result.root_delay / 2) > max_disp ?
-    // server ts_rec must be ts_xmt (cannot send before receive)
-    // leap == 3? Unsynchronized leap second!
+    /// bit | meaning
+    /// ----|------------------
+    ///  0  | there is an unsynchronized leapsecond
+    ///  1  | incorrect NTP version, must be 3 or 4
+    ///  2  | mode in received packet is not server-mode
+    ///  3  | stratum is too large (> 16)
+    ///  4  | poll frequency incorrect
+    ///  5  | sync distance of server too large (> 16s)
+    ///  6  | server last synced long ago
+    ///  7  | client send time after client receive time
+    ///  8  | server send time after server receive time
+    ///  9  | round-trip time must be positive
+    pub const flag_descr = enum(u32) {
+        OK = 0,
+        unsynchronized_leapsecond = 1,
+        incorrect_version = (1 << 1),
+        incorrect_mode = (1 << 2),
+        stratum_too_large = (1 << 3),
+        incorrect_poll_freq = (1 << 4),
+        server_sync_dist_too_large = (1 << 5),
+        server_sync_outdated = (1 << 6),
+        client_send_after_receive = (1 << 7),
+        server_send_after_receive = (1 << 8),
+        negative_rtt = (1 << 9),
+    };
 
+    pub fn printFlags(flags: u32, buf: []u8) !void {
+        if (flags == 0) {
+            _ = try std.fmt.bufPrint(buf, "0 (OK)", .{});
+            return;
+        }
+        var idx: usize = 0;
+        for (std.enums.values(flag_descr)) |v| {
+            const prefix = if (idx > 0) ", " else "";
+            if ((@intFromEnum(v) & flags) > 0) {
+                const s = try std.fmt.bufPrint(buf[idx..], "{s}{s}", .{ prefix, @tagName(v) });
+                idx += s.len;
+            }
+        }
+    }
+
+    /// Validate result from an NTP query. Returns a set of flags as a u32.
+    /// A result of zero means OK. If a bit is set, something is wrong.
+    /// See 'flag_descr'.
+    pub fn validate(result: Result) u32 {
+        var flags: u32 = @intFromEnum(flag_descr.OK);
+
+        // # 0 - unsynchronized leapsecond
+        if (result.leap_indicator == 3)
+            flags |= @intFromEnum(flag_descr.unsynchronized_leapsecond);
+
+        // # 1 - version not 3 or 4
+        if (result.version > 4 or result.version < 3)
+            flags |= @intFromEnum(flag_descr.incorrect_version);
+
+        // # 2 - mode not server-mode
+        if (result.mode != server_mode)
+            flags |= @intFromEnum(flag_descr.incorrect_mode);
+
+        // # 3 - stratum > max_stratum
+        if (result.stratum > max_stratum)
+            flags |= @intFromEnum(flag_descr.stratum_too_large);
+
+        // # 4 - incorrect_poll_freq = (1 << 4),
+        // Note: RFC5905 specifies a min poll of 4, we ignore this deliberately
+        if (result.poll > max_poll)
+            flags |= @intFromEnum(flag_descr.incorrect_poll_freq);
+
+        // # 5 - sync distance of the server;
+        // Note: root_dispersion and _delay as found in the NTP packet only refer to the
+        //       server. To get the actual root distance, the client's delay / dispersion
+        //       to the root would have to be used.
+        if ((result.root_dispersion +| result.root_delay / 2) > max_dist * ns_per_s)
+            flags |= @intFromEnum(flag_descr.server_sync_dist_too_large);
+
+        // # 6 - server_sync_outdated = (1 << 6),
+        if (result.T2.sub(result.Tref) > 1024 * ns_per_s)
+            flags |= @intFromEnum(flag_descr.server_sync_outdated);
+
+        // # 8 - T1>T4: cannot receive before send
+        // Note: #1 this is incorrect across an NTP era boundary
+        //       #2 this might be incorrect due to poor clock resolution / accuracy
+        if (result.T1.decode() > result.T4.decode())
+            flags |= @intFromEnum(flag_descr.client_send_after_receive);
+
+        // # 9 - T2>T3: cannot receive before send
+        // Note: #1 this is incorrect across an NTP era boundary
+        //       #2 this might be incorrect due to poor clock resolution / accuracy
+        if (result.T2.decode() > result.T3.decode())
+            flags |= @intFromEnum(flag_descr.server_send_after_receive);
+
+        // # 10 - round-trip time must not be negative
+        if (result.delay < 0)
+            flags |= @intFromEnum(flag_descr.negative_rtt);
+
+        // TODO : ?
+        // pub const max_dispersion: u64 = 16; // [s]
+
+        return flags;
+    }
 };

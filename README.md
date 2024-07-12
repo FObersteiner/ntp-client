@@ -2,7 +2,7 @@
 
 # NTP Client
 
-Command line app to query an NTP server, to verify your OS clock setting.
+Command line app to query an [NTP](https://datatracker.ietf.org/doc/html/rfc5905) server, to verify your OS clock setting.
 
 - [on Codeberg](https://codeberg.org/FObersteiner/ntp_client)
 - [on github](https://github.com/FObersteiner/ntp-client)
@@ -19,7 +19,7 @@ zig build -Dexe [--release=[safe|small|fast]]
 
 ### NTP library
 
-NTP library (`src/ntp.zig`) can be used independently in other projects; it is exposed via this project's `build.zig` and `build.zig.zon` files. Other dependencies of the binary are lazy, i.e. they won't be fetched if you use only the library in another project.
+Currently targets just SNTP ([RFC4330](https://datatracker.ietf.org/doc/html/rfc4330)). `src/ntp.zig` can be used independently in other projects; it is exposed via this project's `build.zig` and `build.zig.zon` files. Other dependencies of the binary are lazy, i.e. they won't be fetched if you use only the library in another project.
 
 ### Usage of the binary
 
@@ -47,21 +47,21 @@ zig build run -Dexe -- -z local
 ```text
 ---***---
 Server name: "pool.ntp.org"
-Server address: "185.252.140.126:123"
+Server address: "178.63.52.31:123"
 ---
-LI=0 VN=4 Mode=4 Stratum=2 Poll=0 (0 s) Precision=-25 (29 ns)
-ref_id: 2355160
-root_delay: 16021 us, root_dispersion: 1022 us
+LI=0 VN=4 Mode=4 Stratum=2 Poll=0 (0 s) Precision=-24 (59 ns)
+ID: 0xDE03BC83
+Server root dispersion: 30914 us, root delay: 8392 us
 ---
-Server last synced  : 2024-07-03T16:01:24.652337151+02:00
-T1, packet created  : 2024-07-03T16:15:57.183283642+02:00
-T2, server received : 2024-07-03T16:15:57.201324404+02:00
-T3, server replied  : 2024-07-03T16:15:57.201334367+02:00
-T4, reply received  : 2024-07-03T16:15:57.208543450+02:00
+Server last synced  : 2024-07-09T08:54:05.515336464+02:00
+T1, packet created  : 2024-07-09T09:06:56.690365786+02:00
+T2, server received : 2024-07-09T09:06:56.697508476+02:00
+T3, server replied  : 2024-07-09T09:06:56.697553604+02:00
+T4, reply received  : 2024-07-09T09:06:56.700540800+02:00
 (timezone displayed: Europe/Berlin)
 ---
-Offset to timserver: 0.005 s (5415 us)
-Round-trip delay:    0.025 s (25249 us)
+Offset to timserver: 0.002 s (2077 us)
+Round-trip delay:    0.010 s (10129 us)
 ---***---
 ```
 

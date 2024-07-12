@@ -13,8 +13,7 @@ const Resolution = zdt.Duration.Resolution;
 
 const Cmd = @import("cmd.zig");
 const ntp = @import("ntp.zig");
-const pprint = @import("prettyprint.zig").pprint_result;
-const jsonprint = @import("prettyprint.zig").jsonprint_result;
+const pprint = @import("prettyprint.zig");
 
 // ------------------------------------------------------------------------------------
 const timeout_sec: isize = 5; // wait-for-reply timeout
@@ -85,6 +84,8 @@ pub fn main() !void {
 
     // --- query server(s) ------------------------------------------------------------
 
+    // TODO : get number of hops in the connection ?!
+
     var buf: [mtu]u8 = std.mem.zeroes([mtu]u8);
 
     iter_addrs: for (addrlist.addrs, 0..) |dst, i| {
@@ -141,9 +142,9 @@ pub fn main() !void {
         const result: ntp.Result = ntp.Result.fromPacket(p_result, T1, T4);
 
         if (cli.flags.json) {
-            try jsonprint(io.getStdOut().writer(), result, cli.flags.server, dst);
+            try pprint.json(io.getStdOut().writer(), result, cli.flags.server, dst);
         } else {
-            try pprint(io.getStdOut().writer(), result, &tz, cli.flags.server, dst);
+            try pprint.humanfriendly(io.getStdOut().writer(), result, &tz, cli.flags.server, dst);
         }
 
         if (!cli.flags.all) break :iter_addrs;
@@ -152,13 +153,6 @@ pub fn main() !void {
 
 // --- helpers ------------------------------------------------------------------------
 
-/// Print to stdout with trailing newline, unbuffered, and silently returning on failure.
-fn println(comptime fmt: []const u8, args: anytype) void {
-    const stdout = io.getStdOut().writer();
-    nosuspend stdout.print(fmt ++ "\n", args) catch return;
-}
-
-/// Print to stderr with trailing newline, unbuffered, and silently returning on failure.
 fn errprintln(comptime fmt: []const u8, args: anytype) void {
     const stderr = io.getStdErr().writer();
     nosuspend stderr.print(fmt ++ "\n", args) catch return;

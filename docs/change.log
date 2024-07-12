@@ -1,5 +1,10 @@
 # Changelog
 
+## 2024-07-12, v0.0.16
+
+- result validation / flagging
+- pprinter for flags
+
 ## 2024-07-05, v0.0.15
 
 - handle NTP era for Unix time input / output

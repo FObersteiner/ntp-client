@@ -1,5 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
+const print = std.debug.print;
 const rand = std.crypto.random;
 const ntp = @import("ntplib");
 const ns_per_s = 1_000_000_000;
@@ -215,4 +216,52 @@ test "Result - stratum, ref-id" {
     res = ntp.Result.fromPacket(p, T1, T4);
     try testing.expect(!res.refIDprintable());
     try testing.expectEqual([4]u8{ 0x0, 0x0, 0x0, 0x0 }, res.__ref_id);
+}
+
+test "Result - validate / flags" {
+    const now: u64 = @intCast(std.time.nanoTimestamp());
+    var p = ntp.Packet.init(4);
+    p.stratum = 1;
+    p.li_vers_mode = 0 << 6 | 3 << 3 | 4; // server mode
+
+    const T1 = ntp.Time.fromUnixNanos(now + 1 * ns_per_s);
+    p.ts_ref = ntp.Time.fromUnixNanos(now - 5 * ns_per_s).t;
+    p.ts_rec = ntp.Time.fromUnixNanos(now).t;
+    p.ts_xmt = ntp.Time.fromUnixNanos(now).t;
+    const T4 = ntp.Time.fromUnixNanos(now + 3 * ns_per_s);
+    var res = ntp.Result.fromPacket(p, T1, T4);
+
+    var buf: [256]u8 = std.mem.zeroes([256]u8);
+    var flags = res.validate(); // stratum 1 is good
+    try testing.expectEqual(@intFromEnum(ntp.Result.flag_descr.OK), flags);
+    _ = try ntp.Result.printFlags(flags, &buf);
+    try testing.expectEqualStrings("0 (OK)", std.mem.sliceTo(buf[0..], 0));
+
+    p.stratum = 17;
+    res = ntp.Result.fromPacket(p, T1, T4);
+    flags = res.validate();
+    try testing.expectEqual(@intFromEnum(ntp.Result.flag_descr.stratum_too_large), flags);
+
+    p.stratum = 1;
+    //                                 v---- client !
+    p.li_vers_mode = 0 << 6 | 3 << 3 | 3;
+    res = ntp.Result.fromPacket(p, T1, T4);
+    flags = res.validate();
+    try testing.expectEqual(@intFromEnum(ntp.Result.flag_descr.incorrect_mode), flags);
+
+    _ = try ntp.Result.printFlags(flags, &buf);
+    try testing.expectEqualStrings("incorrect_mode", std.mem.sliceTo(buf[0..], 0));
+
+    //               v---------------------- leap !
+    //               v                 v---- client !
+    p.li_vers_mode = 3 << 6 | 3 << 3 | 3;
+    res = ntp.Result.fromPacket(p, T1, T4);
+    flags = res.validate();
+    _ = try ntp.Result.printFlags(flags, &buf);
+    try testing.expectEqualStrings("unsynchronized_leapsecond, incorrect_mode", std.mem.sliceTo(buf[0..], 0));
+
+    p.poll = 18;
+    res = ntp.Result.fromPacket(p, T1, T4);
+    flags = res.validate();
+    try testing.expect(flags & @intFromEnum(ntp.Result.flag_descr.incorrect_poll_freq) > 0);
 }
