@@ -249,6 +249,8 @@ pub const Result = struct {
     offset: i64 = 0,
     /// round-trip delay in ns (network)
     delay: i64 = 0,
+    // TODO : inter-arrival jitter (RFC 3550)
+    ia_jitter: f64 = 0,
     /// dispersion / clock error estimate in ns
     disp: u64 = 0,
 
@@ -322,6 +324,7 @@ pub const Result = struct {
         return true;
     }
 
+    /// NTP query result flagging
     /// bit | meaning
     /// ----|------------------
     ///  0  | there is an unsynchronized leapsecond
@@ -334,7 +337,7 @@ pub const Result = struct {
     ///  7  | client send time after client receive time
     ///  8  | server send time after server receive time
     ///  9  | round-trip time must be positive
-    pub const flag_descr = enum(u32) {
+    pub const result_flag = enum(u32) {
         OK = 0,
         unsynchronized_leapsecond = 1,
         incorrect_version = (1 << 1),
@@ -354,7 +357,7 @@ pub const Result = struct {
             return;
         }
         var idx: usize = 0;
-        for (std.enums.values(flag_descr)) |v| {
+        for (std.enums.values(result_flag)) |v| {
             const prefix = if (idx > 0) ", " else "";
             if ((@intFromEnum(v) & flags) > 0) {
                 const s = try std.fmt.bufPrint(buf[idx..], "{s}{s}", .{ prefix, @tagName(v) });
@@ -365,57 +368,57 @@ pub const Result = struct {
 
     /// Validate result from an NTP query. Returns a set of flags as a u32.
     /// A result of zero means OK. If a bit is set, something is wrong.
-    /// See 'flag_descr'.
+    /// See 'result_flag'.
     pub fn validate(result: Result) u32 {
-        var flags: u32 = @intFromEnum(flag_descr.OK);
+        var flags: u32 = @intFromEnum(result_flag.OK);
 
         // # 0 - unsynchronized leapsecond
         if (result.leap_indicator == 3)
-            flags |= @intFromEnum(flag_descr.unsynchronized_leapsecond);
+            flags |= @intFromEnum(result_flag.unsynchronized_leapsecond);
 
         // # 1 - version not 3 or 4
         if (result.version > 4 or result.version < 3)
-            flags |= @intFromEnum(flag_descr.incorrect_version);
+            flags |= @intFromEnum(result_flag.incorrect_version);
 
         // # 2 - mode not server-mode
         if (result.mode != server_mode)
-            flags |= @intFromEnum(flag_descr.incorrect_mode);
+            flags |= @intFromEnum(result_flag.incorrect_mode);
 
         // # 3 - stratum > max_stratum
         if (result.stratum > max_stratum)
-            flags |= @intFromEnum(flag_descr.stratum_too_large);
+            flags |= @intFromEnum(result_flag.stratum_too_large);
 
         // # 4 - incorrect_poll_freq = (1 << 4),
         // Note: RFC5905 specifies a min poll of 4, we ignore this deliberately
         if (result.poll > max_poll)
-            flags |= @intFromEnum(flag_descr.incorrect_poll_freq);
+            flags |= @intFromEnum(result_flag.incorrect_poll_freq);
 
         // # 5 - sync distance of the server;
         // Note: root_dispersion and _delay as found in the NTP packet only refer to the
         //       server. To get the actual root distance, the client's delay / dispersion
         //       to the root would have to be used.
         if ((result.root_dispersion +| result.root_delay / 2) > max_dist * ns_per_s)
-            flags |= @intFromEnum(flag_descr.server_sync_dist_too_large);
+            flags |= @intFromEnum(result_flag.server_sync_dist_too_large);
 
         // # 6 - server_sync_outdated = (1 << 6),
         if (result.T2.sub(result.Tref) > 1024 * ns_per_s)
-            flags |= @intFromEnum(flag_descr.server_sync_outdated);
+            flags |= @intFromEnum(result_flag.server_sync_outdated);
 
         // # 8 - T1>T4: cannot receive before send
         // Note: #1 this is incorrect across an NTP era boundary
         //       #2 this might be incorrect due to poor clock resolution / accuracy
         if (result.T1.decode() > result.T4.decode())
-            flags |= @intFromEnum(flag_descr.client_send_after_receive);
+            flags |= @intFromEnum(result_flag.client_send_after_receive);
 
         // # 9 - T2>T3: cannot receive before send
         // Note: #1 this is incorrect across an NTP era boundary
         //       #2 this might be incorrect due to poor clock resolution / accuracy
         if (result.T2.decode() > result.T3.decode())
-            flags |= @intFromEnum(flag_descr.server_send_after_receive);
+            flags |= @intFromEnum(result_flag.server_send_after_receive);
 
         // # 10 - round-trip time must not be negative
         if (result.delay < 0)
-            flags |= @intFromEnum(flag_descr.negative_rtt);
+            flags |= @intFromEnum(result_flag.negative_rtt);
 
         // TODO : ?
         // pub const max_dispersion: u64 = 16; // [s]

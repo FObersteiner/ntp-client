@@ -233,21 +233,21 @@ test "Result - validate / flags" {
 
     var buf: [256]u8 = std.mem.zeroes([256]u8);
     var flags = res.validate(); // stratum 1 is good
-    try testing.expectEqual(@intFromEnum(ntp.Result.flag_descr.OK), flags);
+    try testing.expectEqual(@intFromEnum(ntp.Result.result_flag.OK), flags);
     _ = try ntp.Result.printFlags(flags, &buf);
     try testing.expectEqualStrings("0 (OK)", std.mem.sliceTo(buf[0..], 0));
 
     p.stratum = 17;
     res = ntp.Result.fromPacket(p, T1, T4);
     flags = res.validate();
-    try testing.expectEqual(@intFromEnum(ntp.Result.flag_descr.stratum_too_large), flags);
+    try testing.expectEqual(@intFromEnum(ntp.Result.result_flag.stratum_too_large), flags);
 
     p.stratum = 1;
     //                                 v---- client !
     p.li_vers_mode = 0 << 6 | 3 << 3 | 3;
     res = ntp.Result.fromPacket(p, T1, T4);
     flags = res.validate();
-    try testing.expectEqual(@intFromEnum(ntp.Result.flag_descr.incorrect_mode), flags);
+    try testing.expectEqual(@intFromEnum(ntp.Result.result_flag.incorrect_mode), flags);
 
     _ = try ntp.Result.printFlags(flags, &buf);
     try testing.expectEqualStrings("incorrect_mode", std.mem.sliceTo(buf[0..], 0));
@@ -263,5 +263,5 @@ test "Result - validate / flags" {
     p.poll = 18;
     res = ntp.Result.fromPacket(p, T1, T4);
     flags = res.validate();
-    try testing.expect(flags & @intFromEnum(ntp.Result.flag_descr.incorrect_poll_freq) > 0);
+    try testing.expect(flags & @intFromEnum(ntp.Result.result_flag.incorrect_poll_freq) > 0);
 }
