@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.ntp_client_build);
-const client_version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 16 };
+const version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 18 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
-            .version = client_version,
+            .version = version,
         });
 
         b.installArtifact(exe);

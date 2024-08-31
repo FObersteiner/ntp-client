@@ -1,5 +1,15 @@
 # Changelog
 
+## 2024-08-31, v0.0.18
+
+- bump zdt dependency to 0.2.1, flags to newest commit
+
+## 2024-08-04, v0.0.17
+
+- refactor main
+- enforce match of source and target address family. An IPv6 server should only be reachable if an IPv6 source address is used.
+- use 'flags' package v0.6.0
+
 ## 2024-07-12, v0.0.16
 
 - result validation / flagging
