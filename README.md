@@ -5,9 +5,6 @@
 
 Command line app to query an [NTP](https://datatracker.ietf.org/doc/html/rfc5905) server, e.g. to verify your OS clock setting. Or get the time independent of your OS clock. Or mess with your local NTP server.
 
-- [on Codeberg](https://codeberg.org/FObersteiner/ntp_client)
-- [on github](https://github.com/FObersteiner/ntp-client)
-
 ## Usage
 
 ### Building the binary
