@@ -94,7 +94,7 @@ pub fn main() !void {
             sock,
             posix.SOL.SOCKET,
             posix.SO.RCVTIMEO,
-            &std.mem.toBytes(posix.timespec{ .sec = timeout_sec }), // zig 0.13 : .tv_sec
+            &std.mem.toBytes(posix.timespec{ .sec = timeout_sec, .nsec = 0 }), // zig 0.13 : .tv_sec, .tv_nsec
         );
     }
 
