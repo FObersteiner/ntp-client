@@ -3,8 +3,8 @@
     .version = "0.0.18",
     .dependencies = .{
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/4f9d3dfd2de979dc199ab362d9f498cf7e4e7d9f.tar.gz",
-            .hash = "122010e8d58c3028bf13bd049042ebc85c8e517565a60ce6872a5904281ea19753fa",
+            .url = "https://github.com/n0s4/flags/archive/45b5e26a507cda792d92d0bf215af4a167142f68.tar.gz",
+            .hash = "1220a600a82d95809de7cb67c53a08e18bc176f81f7028643116e4cb80c2db8dd06b",
             .lazy = true,
         },
         .zdt = .{
