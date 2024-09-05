@@ -9,6 +9,8 @@ Command line app to query an [NTP](https://datatracker.ietf.org/doc/html/rfc5905
 
 ### Building the binary
 
+Note: `v0.0.18` and greater requires at least Zig `0.14.0-dev.1411+a670f5519` to build.
+
 ```sh
 zig build -Dexe [--release=[safe|small|fast]]
 # build and run, debug: zig build -Dexe run
