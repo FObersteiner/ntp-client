@@ -34,7 +34,7 @@ pub fn main() !void {
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
 
-    const cliflags = flags.parse(&args, CliFlags, .{ .command_name = "ntp_client" });
+    const cliflags = flags.parseOrExit(&args, "ntp_client", CliFlags, .{});
 
     const proto_vers: u8 = cliflags.protocol_version;
     if (proto_vers < 3 or proto_vers > 4) {
