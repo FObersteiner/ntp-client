@@ -106,6 +106,7 @@ pub const Time = struct {
     /// the NTP epoch / era 0.
     /// Cannot handle time before 1970-01-01 / negative Unix time.
     pub fn fromUnixNanos(nanos: i128) Time {
+        // TODO : consider ntp era
         var result: Time = .{ .era = @intCast(@divFloor(@divFloor(nanos, ns_per_s) + epoch_offset, s_per_ntp_era)) };
         var ntp_nanos: i128 = @as(i128, nanos) + ns_per_s * epoch_offset;
         ntp_nanos -= result.era * @as(i128, ns_per_s * s_per_ntp_era);
@@ -115,6 +116,7 @@ pub const Time = struct {
 
     /// NTP time since epoch / era 0 to nanoseconds since the Unix epoch
     pub fn toUnixNanos(time: Time) i128 {
+        // TODO : consider ntp era
         const era_offset: i128 = time.era * @as(i128, s_per_ntp_era * ns_per_s);
         const epoch_offset_ns: i128 = @as(i128, epoch_offset) * @as(i128, ns_per_s);
         return @as(i128, @intCast(time.decode())) - epoch_offset_ns + era_offset;
