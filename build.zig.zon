@@ -3,13 +3,13 @@
     .version = "0.0.18",
     .dependencies = .{
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/refs/tags/v0.9.0.tar.gz",
-            .hash = "1220664668e84d5edf29cb4d081d81bd985814fb16ebd6ae914e1f8740c10303220d",
+            .url = "https://github.com/n0s4/flags/archive/refs/tags/v0.10.0.tar.gz",
+            .hash = "12200d3243c5919d6ae3254f991bdf95956f349ccd6d3463f9beb5454d300a0f1e64",
             .lazy = true,
         },
         .zdt = .{
-            .url = "https://github.com/FObersteiner/zdt/archive/refs/tags/v0.3.3.tar.gz",
-            .hash = "122088ab06f5d3a54916598fb97057602757ae897b2e10f493680087f4d843cf5661",
+            .url = "https://github.com/FObersteiner/zdt/archive/refs/tags/v0.3.5.tar.gz",
+            .hash = "1220f841de6b76c125883bdc1e6919cb3289c6fa50b2e65f834e73355f98032a1fd4",
             .lazy = true,
         },
     },
