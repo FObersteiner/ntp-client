@@ -50,11 +50,11 @@ pub fn json(
             ntpr.ref_id,
             ntpr.root_delay,
             ntpr.root_dispersion,
-            try Datetime.fromUnix(ntpr.Tref.toUnixNanos(), Resolution.nanosecond, Timezone.UTC),
-            try Datetime.fromUnix(ntpr.T1.toUnixNanos(), Resolution.nanosecond, Timezone.UTC),
-            try Datetime.fromUnix(ntpr.T2.toUnixNanos(), Resolution.nanosecond, Timezone.UTC),
-            try Datetime.fromUnix(ntpr.T3.toUnixNanos(), Resolution.nanosecond, Timezone.UTC),
-            try Datetime.fromUnix(ntpr.T4.toUnixNanos(), Resolution.nanosecond, Timezone.UTC),
+            try Datetime.fromUnix(ntpr.Tref.toUnixNanos(), Resolution.nanosecond, .{ .tz = &Timezone.UTC }),
+            try Datetime.fromUnix(ntpr.T1.toUnixNanos(), Resolution.nanosecond, .{ .tz = &Timezone.UTC }),
+            try Datetime.fromUnix(ntpr.T2.toUnixNanos(), Resolution.nanosecond, .{ .tz = &Timezone.UTC }),
+            try Datetime.fromUnix(ntpr.T3.toUnixNanos(), Resolution.nanosecond, .{ .tz = &Timezone.UTC }),
+            try Datetime.fromUnix(ntpr.T4.toUnixNanos(), Resolution.nanosecond, .{ .tz = &Timezone.UTC }),
             ntpr.offset,
             ntpr.delay,
         },
@@ -64,13 +64,12 @@ pub fn json(
 pub fn humanfriendly(
     writer: anytype,
     ntpr: ntp.Result,
-    tz: ?*Timezone,
+    tz_ptr: *const Timezone,
     server_name: []const u8,
     server_addr: std.net.Address,
 ) !void {
     const offset_f: f64 = @as(f64, @floatFromInt(ntpr.offset)) / @as(f64, ns_per_s);
     const delay_f: f64 = @as(f64, @floatFromInt(ntpr.delay)) / @as(f64, ns_per_s);
-    var z: *Timezone = if (tz == null) @constCast(&Timezone.UTC) else tz.?;
 
     // ref_id string looks like "0xFFFFFFFF (xxxx)"
     var refid_buf: [18]u8 = std.mem.zeroes([18]u8);
@@ -120,12 +119,12 @@ pub fn humanfriendly(
             refid_buf,
             ntpr.root_dispersion / ns_per_us,
             ntpr.root_delay / ns_per_us,
-            try Datetime.fromUnix(ntpr.Tref.toUnixNanos(), Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.T1.toUnixNanos(), Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.T2.toUnixNanos(), Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.T3.toUnixNanos(), Resolution.nanosecond, z.*),
-            try Datetime.fromUnix(ntpr.T4.toUnixNanos(), Resolution.nanosecond, z.*),
-            z.name(),
+            try Datetime.fromUnix(ntpr.Tref.toUnixNanos(), Resolution.nanosecond, .{ .tz = tz_ptr }),
+            try Datetime.fromUnix(ntpr.T1.toUnixNanos(), Resolution.nanosecond, .{ .tz = tz_ptr }),
+            try Datetime.fromUnix(ntpr.T2.toUnixNanos(), Resolution.nanosecond, .{ .tz = tz_ptr }),
+            try Datetime.fromUnix(ntpr.T3.toUnixNanos(), Resolution.nanosecond, .{ .tz = tz_ptr }),
+            try Datetime.fromUnix(ntpr.T4.toUnixNanos(), Resolution.nanosecond, .{ .tz = tz_ptr }),
+            tz_ptr.name(),
             offset_f,
             @divFloor(ntpr.offset, ns_per_us),
             delay_f,

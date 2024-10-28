@@ -7,9 +7,7 @@ const posix = std.posix;
 const flags = @import("flags");
 
 const zdt = @import("zdt");
-const Datetime = zdt.Datetime;
 const Timezone = zdt.Timezone;
-const Resolution = zdt.Duration.Resolution;
 
 const CliFlags = @import("cliflags.zig");
 const ntp = @import("ntp.zig");
