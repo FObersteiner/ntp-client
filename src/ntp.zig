@@ -428,3 +428,5 @@ pub const Result = struct {
         return flags;
     }
 };
+
+// NOTE : leap seconds see <https://hpiers.obspm.fr/iers/bul/bulc/ntp/leap-seconds.list>
