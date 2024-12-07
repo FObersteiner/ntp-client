@@ -1,6 +1,7 @@
 .{
     .name = "ntp_client",
     .version = "0.0.18",
+    .minimum_zig_version = "0.14.0-dev",
     .dependencies = .{
         .flags = .{
             .url = "https://github.com/n0s4/flags/archive/refs/tags/v0.10.0.tar.gz",
