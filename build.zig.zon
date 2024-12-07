@@ -1,6 +1,6 @@
 .{
     .name = "ntp_client",
-    .version = "0.0.18",
+    .version = "0.0.19",
     .minimum_zig_version = "0.14.0-dev",
     .dependencies = .{
         .flags = .{
