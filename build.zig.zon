@@ -9,8 +9,8 @@
             .lazy = true,
         },
         .zdt = .{
-            .url = "https://github.com/FObersteiner/zdt/archive/refs/tags/v0.4.2.tar.gz",
-            .hash = "1220c15c8a9cd066ec706bf84591bc33c23b2d812a7ce69f9244dda110da2cc3a813",
+            .url = "https://github.com/FObersteiner/zdt/archive/refs/tags/v0.4.3.tar.gz",
+            .hash = "1220ae70e2ffc518e004c24910069dfe0487784a1d7fb773e375b1488d4a3a35380b",
             .lazy = true,
         },
     },
