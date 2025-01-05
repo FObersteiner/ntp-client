@@ -1,3 +1,6 @@
+// Copyright © 2024-2025 Florian Obersteiner <f.obersteiner@posteo.de>
+// License: see LICENSE file in the root directory of the zdt repository.
+
 //! NTP client library
 const std = @import("std");
 const mem = std.mem;
