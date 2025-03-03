@@ -1,5 +1,6 @@
 .{
-    .name = "ntp_client",
+    .name = .ntp_client,
+    .fingerprint = 0x8ea0635486533c67,
     .version = "0.0.19",
     .minimum_zig_version = "0.14.0-dev",
     .dependencies = .{
