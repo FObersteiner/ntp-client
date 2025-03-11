@@ -20,19 +20,16 @@ const ip_default = "0::0"; // default to IPv6
 // ------------------------------------------------------------------------------------
 
 pub fn main() !void {
-    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    // const allocator = gpa.allocator();
-    // defer _ = gpa.deinit();
-
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
+
     const allocator = arena.allocator();
 
     // for Windows compatibility: feed an allocator for args parsing
-    var args = try std.process.argsWithAllocator(allocator);
-    defer args.deinit();
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
 
-    const cliflags = flags.parseOrExit(&args, "ntp_client", CliFlags, .{});
+    const cliflags = flags.parseOrExit(args, "ntp_client", CliFlags, .{});
 
     const proto_vers: u8 = cliflags.protocol_version;
     if (proto_vers < 3 or proto_vers > 4) {

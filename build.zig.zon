@@ -2,16 +2,16 @@
     .name = .ntp_client,
     .fingerprint = 0x8ea0635486533c67,
     .version = "0.0.19",
-    .minimum_zig_version = "0.14.0-dev",
+    .minimum_zig_version = "0.14.0",
     .dependencies = .{
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/refs/tags/v0.10.0.tar.gz",
-            .hash = "12200d3243c5919d6ae3254f991bdf95956f349ccd6d3463f9beb5454d300a0f1e64",
+            .url = "https://github.com/n0s4/flags/archive/0e2491d8e6d2be38dc0c2ce8e103469886e468bb.tar.gz",
+            .hash = "12204d01f68f191c8e386996b1fbf5d8793a2503d35f830ce38eac74fe38d4b12127",
             .lazy = true,
         },
         .zdt = .{
-            .url = "https://github.com/FObersteiner/zdt/archive/refs/tags/v0.4.4.tar.gz",
-            .hash = "1220d66916574bf097f3edbeaa0c9231087a766f123262e72dabf3615b18f7544e3d",
+            .url = "https://github.com/FObersteiner/zdt/archive/refs/tags/v0.6.0.tar.gz",
+            .hash = "1220dd3330124ac65e603f50ee3ee0baa68aed8220729a0ab7db627bd31a08c4081d",
             .lazy = true,
         },
     },
