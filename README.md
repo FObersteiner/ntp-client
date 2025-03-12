@@ -79,8 +79,8 @@ This package tracks Zig `0.14.0-dev` (master); might not compile with older vers
 
 ## Dependencies
 
-- [flags](https://github.com/n0s4/flags) for command line argument parsing
-- [zdt](https://codeberg.org/FObersteiner/zdt) to display timestamps as UTC or timezone-local datetimes
+- [flags](https://github.com/joegm/flags) for command line argument parsing
+- [zdt](https://github.com/FObersteiner/zdt) to display timestamps as timezone-local datetimes
 
 ## License
 
